@@ -21,11 +21,12 @@ public class endpoint: IService {
 }
 ```
 
-Then add your API methods with following signature which will be a publicly accessible REST service with Json
+Then add your API methods with following signature which will be a publicly accessible REST service with Json output
 
 **PHP**
 ```php
 public function index(array $request, user $user): string {
+    $Array = ['message':'hello!'];
     return json_encode($Array, JSON_ENCODE_OPTIONS);
 }
 ```
@@ -33,11 +34,12 @@ public function index(array $request, user $user): string {
 **C#**
 ```c#
 public string method(JSONNode Request, User user) {
+    string JsonString = "{\"message\":\"hello!\"}"
     return JsonString;
 }
 ```
 
-To force authentication to access it, add following attribute above method
+To force authentication to access it, decorate your REST method with following
 
 **PHP**
 ```php
