@@ -124,9 +124,9 @@ Users and roles are arranged in Organization tree to allow hierarchical manageme
 
 Create as many organization unit as required, and asign them to a parent or root. Later this will define what abilities and data user can access.
 
-**Norte:** If your system is using Active directory, it is possible to import Organization tree from Active directory.
+**Note:** If your system is using Active directory, it is possible to import Organization tree from Active directory.
 
-**Norte:** If your system is using SSO (Single Sign On) Organization Tree is configures in SSO Main and SSO Clients are not required to configure Organization Tree anymore
+**Note:** If your system is using SSO (Single Sign On) Organization Tree is configures in SSO Main and SSO Clients are not required to configure Organization Tree anymore
 
 ### Create Roles
 
@@ -138,9 +138,9 @@ Each user need a role to be able to access system (tough this is overridable in 
 
 Create as many roles as required under each organization unit or inherit roles from organization nodes above in the tree. Permissions for each role will be visible in tree format allowing to give permission to a certain task all together or granular.
 
-**Norte:** If your system is using Active directory, Roles will be imported from Active directory and only permission for each role is editable
+**Note:** If your system is using Active directory, Roles will be imported from Active directory and only permission for each role is editable
 
-**Norte:** If your system is using SSO (Single Sign On), role permissions are configured in SSO Main and SSO Clients are not required to configure Role permissions.
+**Note:** If your system is using SSO (Single Sign On), role permissions are configured in SSO Main and SSO Clients are not required to configure Role permissions.
 
 ### Create Users
 
@@ -152,9 +152,9 @@ Create users under organization units and Assign them a role to inherit its perm
 
 **Note:** Users are by default created as inactive, so you will need to approve them before they are able to access system.
 
-**Norte:** If your system is using Active directory, Users and their roles are imported from Active Directory and only their explisit permissions are configurable.
+**Note:** If your system is using Active directory, Users and their roles are imported from Active Directory and only their explisit permissions are configurable.
 
-**Norte:** If your system is using SSO (Single Sign On), Users are configured in SSO Main and SSO Clients are not required to configure users.
+**Note:** If your system is using SSO (Single Sign On), Users are configured in SSO Main and SSO Clients are not required to configure users.
 
 ## Using Other UI Frameworks.
 This application relies on Single Web pages to manage user access, thus if you are using a single page framework such as react.js, vue.js, angular.js you will need to create a separate page for each permission required. REST API endpoints are not affected.
@@ -264,4 +264,3 @@ A fully customizable dashboard exist in the system which allows users to select 
 **Note:** This is a Web UI only dashboard and does not exists in Android and Windows applications.
 
 **Note:** At the moment only on of each dark and light themes are included in the code as page template. More will be added when Paid component is removed from the code.
-
