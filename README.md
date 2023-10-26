@@ -54,7 +54,7 @@ To force permission check to access your API, decorate your REST method with fol
 @Authenticate("Title")
 ```
 
-**Note:**  Classes that are not implementing `IService` interface, and  non-`public` methods in classes that implement `IService`  will not be accessible as API.
+**Note:**  Classes that are not implementing `IService` interface, and  non-`public` methods in classes that implement `IService`  will not be accessible as API. This is a seurity feature to make sure no method outside what is allowed to be API is called as API from client
 
 ## Create a WEB UI Page
 
