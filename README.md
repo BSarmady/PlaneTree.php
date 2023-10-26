@@ -107,6 +107,11 @@ Initial configuration of application is a little different between languages (du
 - For other languages .NET and Java, Node.JS after installing app in your Webserver, navigate to https://YourApplicationDomain/setup/
 
 **Note:** In future version configuration of PHP will be like other languages too.
+
+There are some benefit of using dynamic setup during initial run namely
+- Application setup is stored in a different folder than application folder thus it will not be accessible by intruders gaining access to application folder.
+- Since configuration data is not stored with application, it can be set differently in Production, UAT and Development servers, and it will not accidentally get included in GIT.
+- Application Configuration is encrypted thus server maintainers cannot read its content and developers will not have access to production data if company policy requires extra security measures to limit access to production data.
   
 ## Adding Organization, Roles and Users.
 ### Create Organizations
