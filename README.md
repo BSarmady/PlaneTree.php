@@ -39,7 +39,7 @@ public string method(JSONNode Request, User user) {
 }
 ```
 
-To force authentication to access it, decorate your REST method with following
+To force permission check to access your API, decorate your REST method with following
 
 **PHP**
 ```php
@@ -58,8 +58,7 @@ To force authentication to access it, decorate your REST method with following
 
 ## Create a WEB UI Page
 
-To add a Web page GUI create an html file in HTML folder which will be publicly accessible. To force authentication to access that page change file extension from .html to .auth.html
-start your html file with following content
+To add a Web page GUI create an html file in HTML folder which will be publicly accessible. Start your html file with following content
 
 ```html
 <!DOCTYPE html>
@@ -82,8 +81,6 @@ start your html file with following content
 </html>
 ```
 
-Then add your content into body identifier (`<!--%%BODY-->` and `<!--BODY%%-->`) and your JavaScript and CSS to header identifier.
-
 To automatically show a menu link to this page in your application menu, add following before header identifier tag
 
 ```html
@@ -93,6 +90,10 @@ And to use specific template for that web page, use following
 ```html
 <meta name="template" content="template name"/>
 ```
+
+Then add your content into body identifier (`<!--%%BODY-->` and `<!--BODY%%-->`) and your JavaScript and CSS to header identifier.
+
+To force permission check to access that page change file extension from `.html` to `.auth.html`.
 
 ## Multi Language API, Interface
 To use translation functionality, add language translation dictionary into its folder, then in your code. Use translation markers like `##TRANSLATE_THIS##` and it will be translated to user's language (if set), otherwise to Website default language.
