@@ -21,11 +21,12 @@ public class endpoint: IService {
 }
 ```
 
-Then add your API methods with following signature which will be a publicly accessible REST service with Json
+Then add your API methods with following signature which will be a publicly accessible REST service with Json output
 
 **PHP**
 ```php
 public function index(array $request, user $user): string {
+    $Array = ['message':'hello!'];
     return json_encode($Array, JSON_ENCODE_OPTIONS);
 }
 ```
@@ -33,11 +34,12 @@ public function index(array $request, user $user): string {
 **C#**
 ```c#
 public string method(JSONNode Request, User user) {
+    string JsonString = "{\"message\":\"hello!\"}"
     return JsonString;
 }
 ```
 
-To force authentication to access it, add following attribute above method
+To force permission check to access your API, decorate your REST method with following
 
 **PHP**
 ```php
@@ -52,12 +54,11 @@ To force authentication to access it, add following attribute above method
 @Authenticate("Title")
 ```
 
-**Note:**  Classes that are not implementing `IService` interface, and  non-`public` methods in classes that implement `IService`  will not be accessible as API.
+**Note:**  Classes that are not implementing `IService` interface, and  non-`public` methods in classes that implement `IService`  will not be accessible as API. This is a seurity feature to make sure no method outside what is allowed to be API is called as API from client
 
 ## Create a WEB UI Page
 
-To add a Web page GUI create an html file in HTML folder which will be publicly accessible. To force authentication to access that page change file extension from .html to .auth.html
-start your html file with following content
+To add a Web page GUI create an html file in HTML folder which will be publicly accessible. Start your html file with following content
 
 ```html
 <!DOCTYPE html>
@@ -65,10 +66,10 @@ start your html file with following content
 <head>
     <meta charset="utf-8"/>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
-<title>Page Title</title>
+    <title>Page Title</title>
     <!--%%HEADER-->
-<style>
-</style>
+    <style>
+    </style>
     <script type="text/javascript">
     </script>
     <!--HEADER%%-->
@@ -80,8 +81,6 @@ start your html file with following content
 </html>
 ```
 
-Then add your content into body identifier (`<!--%%BODY-->` and `<!--BODY%%-->`) and your JavaScript and CSS to header identifier.
-
 To automatically show a menu link to this page in your application menu, add following before header identifier tag
 
 ```html
@@ -91,6 +90,10 @@ And to use specific template for that web page, use following
 ```html
 <meta name="template" content="template name"/>
 ```
+
+Then add your content into body identifier (`<!--%%BODY-->` and `<!--BODY%%-->`) and your JavaScript and CSS to header identifier.
+
+To force permission check to access that page change file extension from `.html` to `.auth.html`.
 
 ## Multi Language API, Interface
 To use translation functionality, add language translation dictionary into its folder, then in your code. Use translation markers like `##TRANSLATE_THIS##` and it will be translated to user's language (if set), otherwise to Website default language.
@@ -104,6 +107,11 @@ Initial configuration of application is a little different between languages (du
 - For other languages .NET and Java, Node.JS after installing app in your Webserver, navigate to https://YourApplicationDomain/setup/
 
 **Note:** In future version configuration of PHP will be like other languages too.
+
+There are some benefit of using dynamic setup during initial run namely
+- Application setup is stored in a different folder than application folder thus it will not be accessible by intruders gaining access to application folder.
+- Since configuration data is not stored with application, it can be set differently in Production, UAT and Development servers, and it will not accidentally get included in GIT.
+- Application Configuration is encrypted thus server maintainers cannot read its content and developers will not have access to production data if company policy requires extra security measures to limit access to production data.
   
 ## Adding Organization, Roles and Users.
 ### Create Organizations
@@ -116,9 +124,9 @@ Users and roles are arranged in Organization tree to allow hierarchical manageme
 
 Create as many organization unit as required, and asign them to a parent or root. Later this will define what abilities and data user can access.
 
-**Norte:** If your system is using Active directory, it is possible to import Organization tree from Active directory.
+**Note:** If your system is using Active directory, it is possible to import Organization tree from Active directory.
 
-**Norte:** If your system is using SSO (Single Sign On) Organization Tree is configures in SSO Main and SSO Clients are not required to configure Organization Tree anymore
+**Note:** If your system is using SSO (Single Sign On) Organization Tree is configures in SSO Main and SSO Clients are not required to configure Organization Tree anymore
 
 ### Create Roles
 
@@ -130,9 +138,9 @@ Each user need a role to be able to access system (tough this is overridable in 
 
 Create as many roles as required under each organization unit or inherit roles from organization nodes above in the tree. Permissions for each role will be visible in tree format allowing to give permission to a certain task all together or granular.
 
-**Norte:** If your system is using Active directory, Roles will be imported from Active directory and only permission for each role is editable
+**Note:** If your system is using Active directory, Roles will be imported from Active directory and only permission for each role is editable
 
-**Norte:** If your system is using SSO (Single Sign On), role permissions are configured in SSO Main and SSO Clients are not required to configure Role permissions.
+**Note:** If your system is using SSO (Single Sign On), role permissions are configured in SSO Main and SSO Clients are not required to configure Role permissions.
 
 ### Create Users
 
@@ -144,9 +152,9 @@ Create users under organization units and Assign them a role to inherit its perm
 
 **Note:** Users are by default created as inactive, so you will need to approve them before they are able to access system.
 
-**Norte:** If your system is using Active directory, Users and their roles are imported from Active Directory and only their explisit permissions are configurable.
+**Note:** If your system is using Active directory, Users and their roles are imported from Active Directory and only their explisit permissions are configurable.
 
-**Norte:** If your system is using SSO (Single Sign On), Users are configured in SSO Main and SSO Clients are not required to configure users.
+**Note:** If your system is using SSO (Single Sign On), Users are configured in SSO Main and SSO Clients are not required to configure users.
 
 ## Using Other UI Frameworks.
 This application relies on Single Web pages to manage user access, thus if you are using a single page framework such as react.js, vue.js, angular.js you will need to create a separate page for each permission required. REST API endpoints are not affected.
@@ -255,5 +263,4 @@ A fully customizable dashboard exist in the system which allows users to select 
 
 **Note:** This is a Web UI only dashboard and does not exists in Android and Windows applications.
 
-**Note:** At the moment only on of each dark and light themes are included in the code as page template. More will be added when Paid component is removed from the code.
-
+**Note:** At the moment only one of each dark and light themes are included in the code as page template. More will be added when Paid component is removed from the code.
