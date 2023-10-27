@@ -66,10 +66,10 @@ To add a Web page GUI create an html file in HTML folder which will be publicly 
 <head>
     <meta charset="utf-8"/>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
-<title>Page Title</title>
+    <title>Page Title</title>
     <!--%%HEADER-->
-<style>
-</style>
+    <style>
+    </style>
     <script type="text/javascript">
     </script>
     <!--HEADER%%-->
