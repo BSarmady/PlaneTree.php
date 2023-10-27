@@ -1,0 +1,1 @@
+icon=fa fa-bar-chart;title=R3 Reports;order=1000

@@ -1,0 +1,8 @@
+@font-face{
+    font-display:swap;
+    font-family:CCSymbols;
+    font-synthesis:none;
+    src:url("CCSymbols.woff2") format("woff2"),
+    url("CCSymbols.woff") format("woff");
+    unicode-range:U+A9, U+229C, U+1F10D-1F10F, U+1F16D-1F16F;
+}

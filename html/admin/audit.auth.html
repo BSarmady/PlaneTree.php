@@ -1,0 +1,281 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="template" content="index"/>
+    <meta charset="utf-8"/>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>##AUDIT_LOG##</title>
+    <meta name="menu" content="order=80;icon=fa fa-file-text-o"/>
+    <!--%%HEADER-->
+    <style>
+        .page-content{height:80vh}
+        .selectable{border-radius:var(--bs-border-radius)}
+        .selectable{cursor:pointer}
+        .log-view{white-space:pre;}
+        .log-files{max-height:100% }
+        .nextline{display:none}
+        @media (max-width:992px){
+            .nextline{display:inline-block}
+            .log-files{max-height:160px;width:initial}
+            .log-holder{max-height:100% }
+        }
+    </style>
+    <script type="text/javascript">
+        $(function () {
+
+            //region init
+            let curr_file = '';
+            let curr_page = -1;
+            let total_pages = 0;
+            let $logView = $('.log-view');
+            let $logHolder = $('.log-holder')
+            let $files = $('.log-files');
+
+            $logView.html('');
+            $files.html('');
+            //endregion
+
+            //region function download(...)
+            function download(request, filename) {
+                fetch(request)
+                    .then(resp => resp.blob())
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    })
+                    .catch(() => displayMessage('error', '##ERROR##', '##ERROR_FAILED_TO_DOWNLOAD_THE_FILE##'));
+            }
+            //endregion
+
+            //region function prettify()
+            function prettify(lines) {
+                try {
+                    const typePos = 18;
+                    let $html = ''
+                    let line_type = '';
+                    for (let line of lines.split(/\r?\n/)) {
+                        let has_type = true;
+                        switch (line.substring(typePos, typePos + 5).trim()) {
+                            case 'DEBUG':
+                                line_type = 'text-secondary';
+                                break;
+                            case 'INFO':
+                                line_type = 'text-info';
+                                break;
+                            case 'WARN':
+                                line_type = 'text-warning';
+                                break;
+                            case 'ERROR':
+                            case 'FATAL':
+                                line_type = 'text-danger';
+                                break;
+                            default:
+                                has_type = false;
+                                break;
+                        }
+                        let cssClass = (line_type === '' ? '' : ' class="' + line_type + '"');
+                        if (has_type) {
+                            $html += '<span class="text-secondary">' + line.substring(0, typePos) + '</span> <span' + cssClass + '"><b>' + line.substring(typePos, typePos + 5) + '</b> ' + line.substring(typePos + 6) + '</span>\n';
+                        } else {
+                            $html += '<span' + cssClass + '">' + line + '</span>\n';
+                        }
+                    }
+                    return $html;
+                } catch (e) {
+                    debug(e.message)
+                    return lines
+                    // catch silently for unsupported browsers
+                }
+            }
+            //endregion
+
+            //region function get_log()
+            function get_log() {
+                let p = {
+                    cmd: 'admin.audit.get_log',
+                    page: curr_page,
+                    name: curr_file
+                }
+                $logView.html('');
+                ajax('', p, data => {
+                    curr_page = data.curr_page;
+                    total_pages = data.total_pages;
+                    $logView.html(prettify(data.lines));
+                    $('.counter').html('(##PAGE## ' + (curr_page + 1) + '/' + (total_pages + 1) + ')');
+                    if (data.lines.length < 0) {
+                        $('.btnDownload').addClass('disabled');
+                    } else {
+                        $('.btnDownload').removeClass('disabled');
+                    }
+                    if (curr_page === 0) {
+                        $('.btnFirst').addClass('disabled');
+                        $('.btnPrev').addClass('disabled');
+                    } else {
+                        $('.btnFirst').removeClass('disabled');
+                        $('.btnPrev').removeClass('disabled');
+                    }
+                    if (curr_page === data.total_pages) {
+                        $('.btnLast').addClass('disabled');
+                        $('.btnNext').addClass('disabled');
+                        $logView[0].scrollTop = $logView[0].scrollHeight;
+                    } else {
+                        $('.btnLast').removeClass('disabled');
+                        $('.btnNext').removeClass('disabled');
+                    }
+                }, e => {
+                    displayMessage('error', '##ERROR##', e, 5000);
+                });
+                return false;
+            }
+            //endregion
+
+            //region Draw File Navigation panel
+            ajax('', {cmd: 'admin.audit.get_list'}, data => {
+                let $html = '';
+                if (!data || data.length < 1) {
+                    $files.html('##ERROR_NO_FILES_WERE_FOUND##');
+                    return false;
+                }
+                for (let i in data) {
+                    let name = i;
+                    try {
+
+                        name = name.slice(0, 4) + '-' + name.slice(4, 6) + '-' + name.substring(6, 8) + ' ' + name.substring(9, 11) + ':'+ name.substring(11, 13) + ' '+('(' + data[i] + ')').padStart(7, '\u00a0');
+                    } catch (e) {
+                        // catch silently for unsupported browsers
+                    }
+                    $html += '<div class="selectable p-1 m-0" data-id="' + i + '">' + name + '</div>';
+                }
+
+                $files.html($html).on({
+                    mouseenter: function () {
+                        $('.selectable').removeClass('bg-primary text-light');
+                        $(this).addClass('bg-primary text-light');
+                    },
+                    mouseleave: function () {
+                        $(this).removeClass('bg-primary text-light');
+                    },
+                    click: function () {
+                        if ($(this).hasClass('bg-success text-white'))
+                            return;
+                        curr_page = -1;
+                        $('.selectable').removeClass('bg-success text-white');
+                        $(this).addClass('bg-success text-white');
+                        curr_file = $(this).attr('data-id');
+                        get_log();
+                    },
+                }, '.selectable');
+                setTimeout(function () {
+                    $('.selectable').first().trigger('click');
+                }, 100); // this time should be larger than initial resize timer otherwise scroll will fall out of div (firefox confirmed)
+            });
+            //endregion
+
+            //region Navigation Buttons Handler
+            $('.log-nav-buttons').on('click', '.btn', function () {
+                $(this).blur();
+                let $this = $(this);
+                let $id = $this.attr('class').replace('btn btn-secondary ', '');
+                switch ($id) {
+                    case 'btnFirst':
+                        curr_page = 0;
+                        return get_log();
+                    case 'btnPrev':
+                        curr_page--;
+                        return get_log();
+                    case 'btnNext':
+                        curr_page++;
+                        return get_log();
+                    case 'btnLast':
+                        curr_page = -1;
+                        return get_log();
+                    case 'btnDownload':
+                        let p = {
+                            cmd: 'admin.audit.download',
+                            name: curr_file,
+                            chunk: 0
+                        }
+                        ajax('', p, data => {
+                            download(data.url, data.name);
+                        });
+                        return false;
+
+                }
+            });
+            //endregion
+
+            //region Resize page_content section to fill the view and Bind screen resize event
+            let resize_timer = undefined;
+            function resize_content(e, o, nowait = false) {
+
+                //region function calcHeight(...)
+                function calcHeight(name) {
+                    let el = name[0]
+                    const styles = getComputedStyle(el);
+                    return Math.ceil(el.offsetHeight + parseFloat(styles['marginTop']) + parseFloat(styles['marginBottom']) + 10 /* 4px margin +1px border x2 */);
+                }
+                //endregion
+
+                if (resize_timer) {
+                    clearTimeout(resize_timer);
+                }
+                resize_timer = setTimeout(function () {
+                    $logView.hide();
+                    $logHolder.css('width', 'initial').css('max-height', 'initial');
+                    let width = $logHolder.width(); // 32 is margin
+                    let height = calcHeight($logHolder) - 10; // 10 is 4px padding
+                    $logHolder.css('width', width + 'px').css('max-height', height + 'px');
+                    $logView.show();
+                    resize_timer = undefined;
+                }, nowait ? 100 : 500);
+            }
+            new ResizeObserver(resize_content).observe($logHolder[0])
+            resize_content(null, null, true);
+            //endregion
+        });
+    </script>
+    <!--HEADER%%-->
+</head>
+<body>
+    <!--%%BODY-->
+    <div class="row page-header pb-2">
+        <div class="col flex-grow-1">
+            <ul class="breadcrumb m-0 d-print-none" aria-label="Breadcrumb">
+                <li class="breadcrumb-item"><a href="/">##HOME##</a></li>
+                <li class="breadcrumb-item" aria-current="page">##ADMIN##</li>
+            </ul>
+            <div class="d-flex flex-row flex-wrap flex-sm-nowrap justify-content-between align-items-center">
+                <div>
+                    <h3 class="fw-bold">##AUDIT_LOG##</h3>
+                </div>
+                <div class="flex-grow-1 text-end px-2 counter text-light">##PAGE## (0 / 0)</div>
+                <div class="log-nav-buttons d-print-none">
+                    <a href="#" class="btn btn-secondary disabled btnDownload"><i class="fa fa-download"></i></a>
+                    <div class=" btn-group" role="group" aria-label="Page Actions">
+                        <a href="#" class="btn btn-secondary disabled btnFirst"><i class="fa fa-step-backward"></i></a>
+                        <a href="#" class="btn btn-secondary disabled btnPrev"><i class="fa fa-flip-horizontal fa-play"></i></a>
+                        <a href="#" class="btn btn-secondary disabled btnNext"><i class="fa fa-play"></i></a>
+                        <a href="#" class="btn btn-secondary disabled btnLast"><i class="fa fa-step-forward"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="box box-primary d-grid">
+        <div class="page-content box-body d-flex flex-row flex-wrap align-items-stretch flex-lg-row">
+            <div class="log-files mb-1 mb-lg-0 font-monospace overflow-x-hidden overflow-y-scroll text-nowrap"></div>
+            <div class="nextline w-100"></div>
+            <div class="log-holder flex-grow-1 m-0 p-1 border rounded-2 overflow-scroll">
+                <div class="log-view font-monospace"></div>
+            </div>
+        </div>
+    </div>
+    <!--BODY%%-->
+</body>
+</html>

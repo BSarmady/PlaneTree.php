@@ -1,0 +1,60 @@
+:root{
+    --color-bg-primary:#1b5e20;
+}
+.dark{
+    --color-bg-primary:#0b4e10;
+}
+
+.navbar-theme{ background-color:var(--color-bg-primary) }
+.content{ min-height:95vh }
+a{ text-decoration:none; }
+.hand{ cursor:pointer }
+
+.debug-border{ border:1px dashed #ff66ff !important; }
+
+.d-flex-cn{ display:flex; flex-flow:column nowrap; }
+.d-flex-cw{ display:flex; flex-flow:column wrap; }
+.d-flex-rn{ display:flex; flex-flow:row nowrap; }
+.d-flex-rw{ display:flex; flex-flow:row wrap; }
+
+.hold-transition *{ -webkit-transition:none !important; -moz-transition:none !important; -o-transition:none !important; transition:none !important; }
+
+.box{ position:relative; border-radius:var(--bs-border-radius); border-top:calc(var(--bs-border-radius) * 1.5) solid var(--bs-secondary); margin-bottom:20px; width:100%; box-shadow:var(--bs-box-shadow-sm); background-color:rgb(var(--bs-tertiary-bg-rgb), 1); color:var(--bs-body-color) }
+
+.box.box-primary{ border-top-color:var(--bs-primary); }
+.box.box-secondary{ border-top-color:var(--bs-secondary); }
+.box.box-success{ border-top-color:var(--bs-success); }
+.box.box-danger{ border-top-color:var(--bs-danger); }
+.box.box-warning{ border-top-color:var(--bs-warning); }
+.box.box-info{ border-top-color:var(--bs-info); }
+
+.box.box-light{ border-top-color:var(--bs-light); }
+.box.box-dark{ border-top-color:var(--bs-dark); }
+
+.box-header{ display:block; padding:0.3em 1em 0.3em; position:relative; }
+.box-header.with-border{ border-bottom:1px solid var(--bs-border-color); }
+
+.box-title{ margin:0; }
+
+.box-body{ border-radius:0; padding:10px; }
+.box-body .no-header{ border-top-right-radius:var(--bs-border-radius); border-top-left-radius:var(--bs-border-radius); }
+.box-body .no-footer{ border-bottom-right-radius:var(--bs-border-radius); border-bottom-left-radius:var(--bs-border-radius); }
+.box-footer{ border-top: var(--bs-border-width) var(--bs-border-style) var(--bs-border-color) ; border-radius:0 0 var(--bs-border-radius) var(--bs-border-radius); padding:10px; }
+.box-footer.with-border{ border-top:1px solid var(--bs-border-color); }
+
+@media print{
+    .content{ background-color:initial;position:relative }
+}
+
+.overlay{ position:absolute; top:0; left:0; width:100%; height:100%;z-index:1100; overflow:hidden; background-color:var(--bs-body-bg);opacity:0.7 }
+.overlay .spinner{ position:absolute; top:50%; left:50%; margin:-64px 0 0 -64px; width:128px; height:128px; animation:rotate 2.2s linear infinite;opacity:1 }
+.overlay .spinner .path{ stroke:var(--bs-body-color); stroke-linecap:round; animation:dash 1.5s ease-in-out infinite; }
+
+@keyframes rotate{
+    100%{ transform:rotate(360deg); }
+}
+
+@keyframes dash{
+    0%, 100%{ stroke-dasharray:128, 256; stroke-dashoffset:256; }
+    50%{ stroke-dasharray:384, 128; stroke-dashoffset:128; }
+}

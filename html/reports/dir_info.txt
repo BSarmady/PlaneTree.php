@@ -1,0 +1,1 @@
+icon=fa fa-bar-chart;title=Reports;order=1000

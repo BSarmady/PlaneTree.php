@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>User Profile</title>
+    <meta name="template" content="index"/>
+    <meta charset="utf-8"/>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <!--%%HEADER-->
+    <style>
+        .image-link{ display:inline-block; position:relative; }
+        .image-link.selected::after{ font-family:FontAwesome, serif; color:#ff0000; content:"\f00c"; filter:drop-shadow(0 0 5px #ffffff); position:absolute; inset-inline-start:10px; bottom:0; font-size:18pt; }
+    </style>
+    <script type="text/javascript">
+        $(function () {
+
+            //TODO save user photo
+
+            //region Page Ids (HTML elements)
+            //const $tabProfile = $('#tabProfile');
+            //const $tabChangePassword = $('#tabChangePassword');
+            const $tabPasswordRecovery = $('#tabPasswordRecovery');
+            const $tabSecurityImage = $('#tabSecurityImage');
+
+            //const $tabProfileContent = $('#tabProfileContent');
+            const $edtDisplayName = $('#edtDisplayName');
+            const $edtMobileNo = $('#edtMobileNo');
+            const $edtEmail = $('#edtEmail');
+            const $edtLanguage = $('#edtLanguage');
+            const $btnSavePersonal = $('#btnSavePersonal');
+
+            const $tabChangePasswordContent = $('#tabChangePasswordContent');
+            const $edtCurrentPassword = $('#edtCurrentPassword');
+            const $edtNewPassword = $('#edtNewPassword');
+            const $edtConfirmPassword = $('#edtConfirmPassword');
+            const $pwdStrength = $('#pwdStrength');
+            //const $btnSavePassword = $('#btnSavePassword');
+
+            const $tabPasswordRecoveryContent = $('#tabPasswordRecoveryContent');
+            const $edtQuestionSelect = $tabPasswordRecoveryContent.find('.question');
+            //const $edtPersonalQuestion = $tabPasswordRecoveryContent.find('.custom-question');
+            const $edtAnswer = $tabPasswordRecoveryContent.find('.answer');
+            const $btnSavePasswordRecovery = $('#btnSavePasswordRecovery');
+
+            //const $tabSecurityImageContent = $('#tabSecurityImageContent');
+            const $edtSecurityImage = $('#edtSecurityImage');
+            const $divAuthImages = $('#divAuthImages');
+            const $edtSecurityPhrase = $('#edtSecurityPhrase');
+            //const $btnSaveSecurityImage = $('#btnSaveSecurityImage');
+            //endregion
+
+            //region bind tab click to change url of the page
+            $('.nav-tabs').on('shown.bs.tab', 'button[data-bs-toggle="tab"]', function (e) {
+                const targetTab = e.target.getAttribute('data-bs-target');
+                $(targetTab).find('form').removeClass('was-validated'); // remove validation from form
+                window.location.hash = targetTab.replace('tab', '').replace('Content', ''); // change url to current tab
+            })
+            //endregion
+
+            //region Bind form submit event for all forms on screen
+            $('form').on('submit', function (e) {
+                e = e.originalEvent;
+                if (e.defaultPrevented)
+                    return false;
+                if (e.submitter) {
+                    let submitterId = e.submitter.id;
+                    switch (submitterId) {
+                        case 'btnSavePersonal':
+                            return savePersonal(e);
+                        case 'btnSavePassword':
+                            return savePassword(e);
+                        case 'btnSavePasswordRecovery':
+                            return saveRecovery(e);
+                        case 'btnSaveSecurityImage':
+                            return saveSecurityImage(e);
+                    }
+                }
+                return false;
+            })
+            //endregion
+
+            //region Read intial data and build dynamic UI
+            ajax('', {cmd: 'users.user_profile'}, function (data) {
+
+                //region Setup Q/A tab if it is enabled
+                if (data_app_config.ar_qa) {
+                    $tabPasswordRecovery.removeClass('d-none');
+                    let _html = '';
+                    for (let item of data.qa_list) {
+                        _html += '<option>' + item + '</option>';
+                    }
+                    $tabPasswordRecoveryContent.find('SELECT').append(_html).change(e => {
+                        const $madeUpGroup = $(e.target).parent().parent().children(":eq(1)");
+                        if (e.target.value === '-1') {
+                            $madeUpGroup.removeClass('d-none') // show madeUp question
+                            $madeUpGroup.find('input').attr('required', true).focus(); //  madeU question is required and focus it
+                        } else {
+                            $madeUpGroup.addClass('d-none') // hide madeUp question
+                            $madeUpGroup.find('input').attr('required', false); // madeUp question is not required
+                            $madeUpGroup.parent().find(".answer").focus() //  focus Answer
+                        }
+                    });
+                    // reset error state on all recovery elements on change or keydown
+                    $tabPasswordRecoveryContent.on('keydown', 'input, select', () => {
+                        $tabPasswordRecoveryContent.find('input, select').each((i, el) => el.setCustomValidity(''));
+                    }).on('change', 'input, select', () => {
+                        $tabPasswordRecoveryContent.find('input, select').each((i, el) => el.setCustomValidity(''));
+                    })
+                }
+                //endregion
+
+                //region Setup Security Image if two-step is enabled
+                if (data_app_config.twostep) {
+                    $edtSecurityImage.val('')
+                    $tabSecurityImage.removeClass('d-none');
+                    let _html = '';
+                    for (let image_id of data.security_images) {
+                        _html += '<div class="col-6 col-lg-3 p-1 text-center"><a href="#" class="image-link" data-id="' + image_id + '"><img class="img-fluid rounded-2 icon-link-hover" src="/assets/security_images/' + image_id + '.png" alt="security image"></a></div>';
+                    }
+                    $divAuthImages.html(_html).on('click', 'a', function (e) {
+                        const $this = $(this)
+                        $divAuthImages.find('a').removeClass('selected')
+                        $this.addClass('selected')
+                        $edtSecurityImage.val($this.data('id'))
+                        e.preventDefault()
+                    });
+                }
+                //endregion
+
+                //region Bind Change Password Tab events
+                $tabChangePasswordContent.on('keyup', 'input', function (e) {
+
+                    //region const messages=[...]
+                    const messages = [
+                        /*0:*/'Old password is empty',
+                        /*1:*/'New password is empty',
+                        /*2:*/'Confirm your new password',
+                        /*3:*/'New password is same as your current password',
+                        /*4:*/'New password and its confirmation do not match'
+                    ];
+                    //endregion
+
+                    //region function RenderPasswordBar(...)
+                    function RenderPasswordBar(password) {
+
+                        //region function PasswordStrength(...)
+                        function PasswordStrength(password) {
+                            let score = 1;
+                            if (password.length < 1) return 0;
+                            if (password.length < 4) return 1;
+                            if (password.length >= 8) score++;
+                            if (password.length >= 10) score++;
+                            if (password.match(/\d+/)) score++;
+                            if (password.match(/[a-z]/) && password.match(/[A-Z]/)) score++;
+                            if (password.match(/.[!,@#$%^&*?_~-£()]/)) score++;
+                            if (score > 5) score = 5;
+                            return score;
+                        }
+                        //endregion
+                        const levelClasses = ['', 'bg-danger', 'bg-warning', 'bg-info', 'bg-success', 'bg-primary'];
+                        const levelText = ['Blank', 'Very Weak', 'Weak', 'Good', 'Strong', 'Very Strong'];
+                        for (let c of levelClasses)
+                            $pwdStrength.removeClass(c);
+                        let score = PasswordStrength(password)
+                        $pwdStrength
+                            .attr('aria-valuenow', score)
+                            .text(levelText[score])
+                            .addClass(levelClasses[PasswordStrength(password)])
+                            .css('width', (score * 20) + '%')
+                    }
+                    //endregion
+
+                    //on first key press, put form in validated mode, so it show
+                    // messages correctly
+                    $tabChangePasswordContent.find('form').addClass('was-validated');
+
+                    const $newFeedback = $edtNewPassword.parent().find('.invalid-feedback');
+                    const $confirmFeedback = $edtConfirmPassword.parent().find('.invalid-feedback');
+                    $edtCurrentPassword[0].setCustomValidity($edtCurrentPassword.val() === '' ? ' ' : '')
+                    switch (e.target.id) {
+                        case 'edtNewPassword':
+                            if ($edtNewPassword.val() === '') {
+                                $edtNewPassword[0].setCustomValidity(messages[1])
+                                $newFeedback.text(messages[1]);
+                            } else if ($edtNewPassword.val() === $edtCurrentPassword.val()) {
+                                $edtNewPassword[0].setCustomValidity(messages[3])
+                                $newFeedback.text(messages[3]);
+                            } else {
+                                $edtNewPassword[0].setCustomValidity('')
+                                $newFeedback.text(messages[1]);
+                                RenderPasswordBar(e.target.value);
+                            }
+                            break;
+                        case 'edtConfirmPassword':
+                            if ($edtConfirmPassword.val() === '') {
+                                $edtConfirmPassword[0].setCustomValidity(messages[2])
+                                $confirmFeedback.text(messages[2]);
+                            } else if ($edtNewPassword.val() !== $edtConfirmPassword.val()) {
+                                $edtConfirmPassword[0].setCustomValidity(messages[4])
+                                $confirmFeedback.text(messages[4]);
+                            } else {
+                                $edtConfirmPassword[0].setCustomValidity('')
+                                $confirmFeedback.text(messages[2]);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                });
+                //endregion
+
+                //region Activate tab requested from # in url, otherwise the first tab
+                if (window.location.hash !== '') {
+                    let tab_name = window.location.hash.replace('#', '#tab');
+                    const activating_tab = $(tab_name);
+                    if (activating_tab.is(':visible'))
+                        activating_tab.trigger('click');
+                }
+                //endregion
+
+                //region Fill forms with data received from server
+                $edtDisplayName.val(data.user.real_name);
+                $edtMobileNo.val(data.user.mobile_no);
+                $edtEmail.val(data.user.email);
+                $edtLanguage.val(data.user.language);
+                for (let i = 0; i < data.user.qa.length; i++) {
+                    let qa = data.user.qa[i];
+                    $edtQuestionSelect[i].value = qa.q;
+                    if (qa.a === '[answer is hashed]') {
+                        $edtAnswer[i].setAttribute('placeholder', qa.a);
+                        $edtAnswer[i].value = '';
+                    } else {
+                        $edtAnswer[i].setAttribute('placeholder', 'Answer');
+                        $edtAnswer[i].value = qa.a;
+                    }
+                }
+                //endregion
+            });
+            //endregion
+
+            //region function savePersonal()
+            function savePersonal(e) {
+                $(this).attr('disabled', true).addClass('wait');
+                let p = {
+                    cmd: 'users.set_personal',
+                    display_name: $edtDisplayName.val(),
+                    mobile_no: $edtMobileNo.val(),
+                    email: $edtEmail.val(),
+                    language: $edtLanguage.val()
+                }
+                $btnSavePersonal.attr('disabled', true).addClass('wait');
+                ajax('', p, () => {
+                    displayMessage('success', 'Success', 'Settings are saved successfully.', 2000);
+                });
+                e.preventDefault();
+                return false;
+            }
+            //endregion
+
+            //region function savePassword()
+            function savePassword() {
+                const p = {
+                    cmd: 'users.change_password',
+                    cur: $edtCurrentPassword.val(),
+                    new: $edtNewPassword.val()
+                }
+                $('#btn_save_password').attr('disabled', true).addClass('wait');
+                ajax('', p, data => {
+                    displayMessage('success', 'Success', 'Password is changed', 2000);
+                    if (data.redirect)
+                        setTimeout(function () {
+                            location.href = data.redirect;
+                        }, 2000);
+                });
+            }
+            //endregion
+
+            //region function saveRecovery()
+            function saveRecovery(e) {
+                e.preventDefault();
+                let questions = [];
+                let answers = [];
+                let questionSet = [];
+                let errorState = false;
+                $('.question-set').each((i, el) => {
+                    const $el = $(el);
+                    let $edtQuestion = $el.find('.question');
+                    let $edtCustomQ = $el.find('.custom-question');
+                    let $edtAnswer = $el.find('.answer');
+                    let qSet = {
+                        q: $edtQuestion.val() === '-1' ? $edtCustomQ.val() : $edtQuestion.val(),
+                        a: $edtAnswer.val()
+                    }
+                    if (questions.indexOf(qSet.q.toLowerCase()) > -1) {
+                        if (qSet.q === $edtCustomQ.val()) {
+                            $edtCustomQ[0].setCustomValidity(' ');
+                        } else {
+                            $edtQuestion[0].setCustomValidity(' ');
+
+                        }
+                        errorState = true;
+                    } else {
+                        if (qSet.q === $edtCustomQ.val()) {
+                            $edtCustomQ[0].setCustomValidity('');
+                        } else {
+                            $edtQuestion[0].setCustomValidity('');
+                        }
+                        questions.push(qSet.q.toLowerCase());
+                    }
+                    if (answers.indexOf(qSet.a.toLowerCase()) > -1) {
+                        $edtAnswer[0].setCustomValidity(' ');
+                        errorState = true;
+                    } else {
+                        $edtAnswer[0].setCustomValidity('');
+                        answers.push(qSet.a.toLowerCase());
+                    }
+                    questionSet.push(qSet);
+                })
+                if (errorState) {
+                    displayMessage('error', 'Error', 'Duplicate question or answers', 3000)
+                    return false;
+                }
+                let p = {
+                    cmd: 'users.set_qa',
+                    qa: questionSet
+                };
+                $btnSavePasswordRecovery.attr('disabled', true).addClass('wait');
+                ajax('', p, data => {
+                    displayMessage('success', 'Success', 'Settings are saved successfully.', 2000);
+                    if (data.redirect)
+                        setTimeout(function () {
+                            location.href = data.redirect;
+                        }, 2000);
+                });
+            }
+            //endregion
+
+            //region function saveSecurityImage()
+            function saveSecurityImage() {
+                hideMessage();
+                const selected = $edtSecurityImage.val();
+                const phrase = $edtSecurityPhrase.val();
+                const p = {
+                    cmd: 'users.set_security_info',
+                    code: selected,
+                    phrase: phrase
+                }
+                $(this).attr('disabled', true).addClass('wait');
+                ajax('', p, function (data) {
+                    displayMessage('success', 'Success', 'Settings are saved successfully.', 1000);
+                    if (data.redirect)
+                        setTimeout(function () {
+                            location.href = data.redirect;
+                        }, 2000);
+                });
+            }
+            //endregion
+        })
+    </script>
+    <!--HEADER%%-->
+</head>
+<body>
+    <!--%%BODY-->
+    <div class="container pt-2">
+        <div class="nav nav-tabs" role="tablist">
+            <button type="button" role="tab" data-bs-toggle="tab" aria-selected="true" class="nav-link active" id="tabProfile" data-bs-target="#tabProfileContent" aria-controls="tabProfileContent">User Profile</button>
+            <button type="button" role="tab" data-bs-toggle="tab" aria-selected="false" class="nav-link" id="tabChangePassword" data-bs-target="#tabChangePasswordContent" aria-controls="tabChangePasswordContent">Change Password</button>
+            <button type="button" role="tab" data-bs-toggle="tab" aria-selected="false" class="nav-link d-none" id="tabPasswordRecovery" data-bs-target="#tabPasswordRecoveryContent" aria-controls="tabPasswordRecoveryContent">Password Recovery</button>
+            <button type="button" role="tab" data-bs-toggle="tab" aria-selected="false" class="nav-link d-none" id="tabSecurityImage" data-bs-target="#tabSecurityImageContent" aria-controls="tabSecurityImageContent">Security Image</button>
+        </div>
+        <div class="tab-content border-start border-end border-bottom rounded-bottom-1 mb-3">
+            <div class="tab-pane fade show active" id="tabProfileContent" role="tabpanel" aria-labelledby="tabProfile" tabindex="0">
+                <div class="container">
+                    <form class="needs-validation">
+                        <div class="mb-3">
+                            <label class="form-label" for="edtDisplayName">Display Name</label>
+                            <input class="form-control" type="text" id="edtDisplayName" placeholder="Enter a name that will be displayed to other users" maxlength="50" autocomplete="name">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtMobileNo">Mobile Number</label>
+                            <input class="form-control" type="tel" id="edtMobileNo" placeholder="A mobile phone number that will be used in password recovery" maxlength="16" autocomplete="tel">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtEmail">Email address</label>
+                            <input class="form-control" type="email" id="edtEmail" placeholder="An email address that will be used for communications" maxlength="50" autocomplete="email">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtLanguage">Preferred Language</label>
+                            <select class="form-select" id="edtLanguage" autocomplete="language">
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 text-end">
+                            <button type="reset" class="btn btn-outline-secondary">Reset</button>
+                            <button type="submit" class="btn btn-primary" id="btnSavePersonal">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tabChangePasswordContent" role="tabpanel" aria-labelledby="tabChangePassword" tabindex="1">
+                <div class="container">
+                    <form class="needs-validation">
+                        <div class="mb-3">
+                            <label class="form-label" for="edtCurrentPassword">Your current password</label>
+                            <input class="form-control" type="password" id="edtCurrentPassword" maxlength="32" autocomplete="current-password" required>
+                            <div class="invalid-feedback">Please enter your current password</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtNewPassword">Select a new password</label>
+                            <input class="form-control" type="password" id="edtNewPassword" maxlength="32" autocomplete="new-password" required>
+                            <div class="invalid-feedback">New password is empty</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtConfirmPassword">Confirm new password</label>
+                            <input class="form-control" type="password" id="edtConfirmPassword" maxlength="32" autocomplete="new-password" required>
+                            <div class="invalid-feedback">Confirm your new password</div>
+                        </div>
+                        <div class="mb-3 progress">
+                            <div id="pwdStrength" class="progress-bar" role="progressbar" style="width: 0" aria-valuenow="0" aria-valuemin="0" aria-valuemax="5">Blank</div>
+                        </div>
+                        <div class="mb-3 text-end">
+                            <button type="reset" class="btn btn-outline-secondary">Reset</button>
+                            <button type="submit" class="btn btn-primary" id="btnSavePassword">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tabPasswordRecoveryContent" role="tabpanel" aria-labelledby="tabPasswordRecovery" tabindex="2">
+                <div class="container pt-2">
+                    <dl class="text-muted">
+                        <dd>During password recovery you will be asked 2 questions out of 3. you will need to answer both question correctly to be able to reset your password</dd>
+                        <dd>For added security questions cannot be same</dd>
+                    </dl>
+                    <form class="needs-validation">
+                        <div class="question-set">
+                            <div class="mb-3">
+                                <label class="form-label" for="edtQuestionSelect1">First question</label>
+                                <select class="form-select question" id="edtQuestionSelect1" required>
+                                    <option value="">[Select a question]</option>
+                                    <option value="-1">[Roll your own question]</option>
+                                </select>
+                            </div>
+                            <div class="mb-3 Question1Group d-none">
+                                <input class="form-control custom-question" type="text" id="edtPersonalQuestion1" maxlength="250" placeholder="personal question" aria-label="personal question"/>
+                            </div>
+                            <div class="mb-3">
+                                <input class="form-control answer" type="text" id="edtAnswer1" maxlength="128" placeholder="Answer" aria-label="Answer" required>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="question-set">
+                            <div class="mb-3">
+                                <label class="form-label" for="edtQuestionSelect2">Second Question</label>
+                                <select class="form-select question" id="edtQuestionSelect2" required>
+                                    <option value="">[Select a question]</option>
+                                    <option value="-1">[Roll your own question]</option>
+                                </select>
+                            </div>
+                            <div class="mb-3 Question2Group d-none">
+                                <input class="form-control custom-question" type="text" id="edtPersonalQuestion2" maxlength="250" placeholder="personal question" aria-label="personal question"/>
+                            </div>
+                            <div class="mb-3">
+                                <input class="form-control answer" type="text" id="edtAnswer2" maxlength="128" placeholder="Answer" aria-label="Answer" required>
+                            </div>
+                            <hr>
+                        </div>
+                        <div class="question-set">
+                            <div class="mb-3">
+                                <label class="form-label" for="edtQuestionSelect3">Third question</label>
+                                <select class="form-select question" id="edtQuestionSelect3" required>
+                                    <option value="">[Select a question]</option>
+                                    <option value="-1">[Roll your own question]</option>
+                                </select>
+                            </div>
+                            <div class="mb-3 Question3Group d-none">
+                                <input class="form-control custom-question" type="text" id="edtPersonalQuestion3" maxlength="250" placeholder="personal question" aria-label="personal question"/>
+                            </div>
+                            <div class="mb-3">
+                                <input class="form-control answer" type="text" id="edtAnswer3" maxlength="128" placeholder="Answer" aria-label="Answer" required>
+                            </div>
+                        </div>
+                        <div class="mb-3 text-end">
+                            <button type="reset" class="btn btn-outline-secondary">Reset</button>
+                            <button type="submit" class="btn btn-primary" id="btnSavePasswordRecovery">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tabSecurityImageContent" role="tabpanel" aria-labelledby="tabSecurityImage" tabindex="3">
+                <div class="container pt-2">
+                    <dl class="text-muted">
+                        <dd><b>Select an image amd a enter a phrase as your security image</b></dd>
+                        <dd>Your selected image is a security measure to ensure that you are logging in to correct website. If you do not see your selected image during login, the website is a phishing website and they want to steal your password.</dd>
+                    </dl>
+                    <form class="needs-validation">
+                        <div class="mb-3">
+                            <label class="form-label" for="edtSecurityImage">Please select a security image</label>
+                            <input type="text" id="edtSecurityImage" class="fade" required/>
+                            <div class="mb3" id="divAuthImages" style="display:flex; flex-flow:row wrap; justify-content:center; width:900px;margin: 0 auto "></div>
+                            <div class="invalid-feedback">Please Select a security image</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edtSecurityPhrase">Please enter a security phrase</label>
+                            <input class="form-control" type="text" id="edtSecurityPhrase" maxlength="16" required>
+                            <div class="invalid-feedback">Please Select a security phrase</div>
+                        </div>
+                        <div class="mb-3 text-end">
+                            <button type="reset" class="btn btn-outline-secondary">Reset</button>
+                            <button type="submit" class="btn btn-primary" id="btnSaveSecurityImage">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--BODY%%-->
+</body>
+</html>

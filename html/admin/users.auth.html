@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="template" content="index"/>
+    <meta charset="utf-8"/>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>Users</title>
+    <meta name="menu" content="order=10;icon=fa fa-address-book-o"/>
+    <!--%%HEADER-->
+    <link rel="stylesheet" type="text/css" href="/assets/plugins/tabulator5.5/tabulator.min.css"/>
+    <link rel="stylesheet" type="text/css" href="/assets/plugins/tree/tree.min.css"/>
+    <style>
+        .tree{border-radius:var(--bs-border-radius);max-height:85vh}
+        .permissions-tree{height:150px;overflow:auto;box-sizing:border-box; border:1px solid var(--bs-border-color-translucent); border-radius:var(--bs-border-radius);}
+        @media (max-width:992px){
+            .tree{height:160px;max-height:160px !important;overflow:auto; border:1px solid var(--bs-border-color-translucent); border-radius:var(--bs-border-radius);margin-bottom:5px}
+        }
+    </style>
+    <script type="text/javascript" src="/assets/plugins/xlsx-0.19.2/xlsx.full.min.js"></script>
+    <script type="text/javascript" src="/assets/plugins/jsPDF-2.5.1/jspdf.umd.min.js"></script>
+    <script type="text/javascript" src="/assets/plugins/tabulator5.5/tabulator.min.js"></script>
+    <script type="text/javascript" src="/assets/plugins/jsPDF-AutoTable-3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script type="text/javascript" src="/assets/plugins/tree/tree.min.js"></script>
+    <script type="text/javascript">
+
+        $(function () {
+
+            //region Constants and local variables
+            let table = null;
+            let root = null
+            let org_data = [];
+            let activeNode = null;
+            let roles = null;
+            let user_permissions = [];
+
+            const $organization_tree = $(".organization-tree");
+            const $_full_height = $('.full-height');
+            const $edt_node_only = $('#edt_node_only');
+            const $edt_search = $('.edtSearch');
+            const $permission_tree = $('.permissions-tree');
+
+            const $edt_username = $('#edt_username');
+            const $edt_organization = $('#edt_organization');
+            const $edt_password = $('#edt_password');
+            const $edt_account_type = $('#edt_account_type');
+            const $edt_real_name = $('#edt_real_name');
+            const $edt_mobile_no = $('#edt_mobile_no');
+            const $edt_email = $('#edt_email');
+            const $edt_comments = $('#edt_comments');
+            const $edt_existing_roles = $('#edt_existing_roles');
+            const $edt_user_roles = $('#edt_user_roles');
+
+            const $dlg_Add_Edit = new bootstrap.Modal('#dlg_Add_Edit')
+            $('#dlg_Add_Edit').on('shown.bs.modal', function () {
+                $edt_real_name.focus();
+                $edt_username.focus();
+            });
+            const $dlg_title = $('#dlg_add_edit_title');
+
+            const $edt_explicit_username = $('#edt_explicit_username');
+            const $dlg_explicit = new bootstrap.Modal('#dlg_explicit');
+            //endregion
+
+            //region function fill_roles_list()
+            function fill_roles_list(node_id) {
+                // Sort by reverse domain name
+
+                const _roles = get_roles_for_organization(node_id).sort((a, b) => {
+                    if (a.reverse_domain === 'root')
+                        return -1;
+                    if (b.reverse_domain === 'root')
+                        return 1;
+                    // check length of domain
+                    let domain_count = count_char_in_string('.', a.reverse_domain) - count_char_in_string('.', b.reverse_domain);
+                    if (domain_count !== 0)
+                        return domain_count;
+                    let orgs = a.reverse_domain.localeCompare(b.reverse_domain);
+                    if (orgs !== 0)
+                        return orgs;
+                    return a.name.localeCompare(b.name);
+                });
+                let organization_name = '';
+                let $html = '<option value="" disabled selected>Available roles</option>';
+                for (let role of _roles) {
+                    if (organization_name !== role.reverse_domain) {
+                        if (organization_name !== '')
+                            $html += '</optgroup>';
+                        organization_name = role.reverse_domain;
+                        $html += '<optgroup  label="' + role.domain + '">';
+                    }
+                    $html += '<option value="' + role.name + '">' + role.name + (role.domain === '' ? '' : '@' + role.domain) + '</option>';
+                }
+                $edt_existing_roles.html($html);
+            }
+            //endregion
+
+            //region function fill_organization_list()
+            function fill_organization_list() {
+
+                //region function sort_special(...)
+                function sort_special(parent_id = null) {
+                    let children = [];
+                    for (let org of org_data) {
+                        if (org.p === parent_id)
+                            children.push(org);
+                    }
+                    if (children.length < 1)
+                        return [];
+
+                    children.sort((a, b) => {
+
+                        //region function has_children(...)
+                        function has_children(node_id) {
+                            for (let node of org_data) {
+                                if (node.p === node_id) {
+                                    return 1;
+                                }
+                            }
+                            return 0;
+                        }
+                        //endregion
+
+                        let a_has_child = has_children(a.k);
+                        let b_has_child = has_children(b.k);
+                        if (a_has_child !== b_has_child)
+                            return b_has_child - a_has_child;
+                        return (a.n).localeCompare(b.n);
+                    })
+                    let ret = [];
+                    for (let child of children) {
+                        ret.push(child);
+                        let s = sort_special(child.k);
+                        ret = ret.concat(s)
+                    }
+                    return ret;
+                }
+                //endregion
+
+                const orgs = sort_special();
+                let _html = '<option value="" disabled selected>Organization</option>';
+                for (let org of orgs) {
+                    _html += '<option value="' + org.k + '">' + org.d /* + (org.domain === '' ? '' : ' (' + org.domain + ')')*/ + '</option>';
+                }
+                $edt_organization.html(_html);
+            }
+            //endregion
+
+            //region function find_org_by_id(...)
+            function find_org_by_id(node_id) {
+                for (let org of org_data) {
+                    if (org.k === node_id)
+                        return org;
+
+                }
+                return null;
+            }
+            //endregion
+
+            //region function get_users_for_organization(...)
+            function get_users_for_organization(organization_id) {
+
+                //region build_user_domain(...)
+                function build_user_domain(data) {
+                    for (let user of data) {
+                        let org = find_org_by_id(user.organization_id);
+                        user.domain = org.domain;
+                        if (user.domain === '')
+                            user.domain = 'Root'
+                    }
+                    return data;
+                }
+                //endregion
+
+                let p = {
+                    cmd: 'admin.users.list',
+                    organization_id: organization_id,
+                    node_only: $edt_node_only.is(':checked'),
+                    search: $edt_search.val()
+                }
+                hideMessage();
+                ajax('', p, function (data) {
+                    table.setData(build_user_domain(data));
+                });
+            }
+            //endregion
+
+            //region function tree_actions(...)
+            function tree_actions(event, target_node, dest_node) {
+                if (event === 'click') {
+                    if (target_node) {
+                        activeNode = target_node;
+                        get_users_for_organization(activeNode.k);
+                        fill_roles_list(activeNode.k);
+                    }
+                }
+            }
+            //endregion
+
+            //region function get_roles_for_organization(...)
+            function get_roles_for_organization(node_id) {
+
+                //region function get_parents(...)
+                function get_parents(node_id) {
+                    let current_node = find_org_by_id(node_id);
+                    if (current_node == null)
+                        return [];
+                    let parents = get_parents(current_node.p);
+                    parents.push(node_id);
+                    return parents;
+                }
+                //endregion
+
+                //region function get_children(...)
+                function get_children(node_id) {
+                    let current_node = find_org_by_id(node_id);
+                    if (current_node == null)
+                        return [];
+                    let orgs = [];
+                    for (let org of org_data) {
+                        if (org.p === node_id) {
+                            orgs.push(org.k);
+                            orgs = orgs.concat(get_children(org.k));
+                        }
+                    }
+                    return orgs;
+                }
+                //endregion
+
+                //region function is_role_from_gods(...)
+                function is_role_from_gods(org_id) {
+                    for (const org of org_data) {
+                        if (org.k === org_id)
+                            return false;
+                    }
+                    return true;
+                }
+                //endregion
+
+                if (!activeNode)
+                    return [];
+
+                // filter local roles variable to make a list to show in grid
+                let roles_to_show = [];
+                // if supposed to show roles from this node and all nodes below
+                let parent_orgs = get_parents(node_id);
+                let child_orgs = get_children(node_id);
+                // list of roles defined in parent and are visible to children
+                // plus roles defined in current node
+                for (let role of roles) {
+                    // if role doesn't match any search don't include it
+                    if (role.organization_id === activeNode.k) {
+                        // role belong to current node
+                        roles_to_show.push(Object.assign({}, role, {editable: true}));
+                    } else if (parent_orgs.indexOf(role.organization_id) > -1 && role.visible_below) {
+                        // role belong to nodes above
+                        roles_to_show.push(Object.assign({}, role, {editable: false}));
+                    } else if (is_role_from_gods(role.organization_id)) {
+                        // role came from much higher than current root
+                        roles_to_show.push(Object.assign({}, role, {editable: false}));
+                    }
+                }
+                // roles that are defined in children
+                for (let role of roles) {
+                    // if role doesn't match any search don't include it
+                    if (child_orgs.indexOf(role.organization_id) > -1)
+                        roles_to_show.push(Object.assign({}, role, {editable: true}));
+                }
+                return roles_to_show;
+            }
+            //endregion
+
+            //region function id_cell_formatter(...)
+            function id_cell_formatter(cell) {
+                const row_data = cell.getRow().getData();
+
+                //region function is_editable()
+                function is_editable() {
+                    return data_current_user.username !== row_data.username;
+                }
+                //endregion
+
+                //region function format_date(...)
+                function format_date(value) {
+                    if (!value)
+                        return '';
+                    return value.substring(0, 16);
+                }
+                //endregion
+
+                //region function get_status_icon(...)
+                function get_status_icon(status) {
+                    switch (status) {
+                        case 'initial':
+                            return '<button class="btn btn-sm btn-warning activate" title="##USER_IS_CREATED_CLICK_TO_ACTIVATE##"><i class="fa fa-exclamation-circle"></i></button>';
+                        case 'verified':
+                            return '<button class="btn btn-sm btn-success activate" title="##USER_IS_VERIFIED_CLICK_TO_ACTIVATE##"><i class="fa fa-check"></i></button>';
+                        case 'active':
+                            return '<button class="btn btn-sm btn-secondary ban" title="##USER_IS_ACTIVE_CLICK_TO_BAN##"><i class="fa fa-certificate"></i></button>'
+                        case 'dormant':
+                            return '<button class="btn btn-sm btn-danger activate" title="##USER_IS_DORMANT_CLICK_TO_ACTIVATE##"><i class="fa fa-bed"></i></button>'
+                        case 'banned':
+                            return '<button class="btn btn-sm btn-danger activate" title="##USER_IS_BANNED_CLICK_TO_ACTIVATE##"><i class="fa fa-ban"></i></button>'
+                        case 'deleted':
+                            return '<button class="btn btn-sm btn-dark activate" title="##USER_IS_DELETED_CLICK_TO_ACTIVATE##"><i class="fa fa-user-times"></i></button>'
+                        case 'locked':
+                            return '<button class="btn btn-sm btn-danger unlock" title="' + '##LOCKED_OUT_AT_0_CLICK_TO_UNLOCK##'.format(format_date(row_data.date_locked_out)) + '"><i class="fa fa-lock"></i></button>'
+                    }
+                }
+                //endregion
+
+                return '<div class="btn-group">'
+                    + '<button class="btn btn-sm btn-primary edit" title="##EDIT##"' + (is_editable() ? '' : ' disabled') + '><i class="fa fa-pencil"></i></button>'
+                    + '<button class="btn btn-sm btn-danger delete" title="##DELETE##"' + (is_editable() ? '' : ' disabled') + '><i class="fa fa-trash-o"></i></button>'
+                    + '<button class="btn btn-sm btn-secondary explicit" title="##EDIT_EXPLICIT_PERMISSIONS##"' + (is_editable() ? '' : ' disabled') + '><i class="fa fa-id-card-o"></i></button>'
+                    + '</div> '
+                    + get_status_icon(row_data.status)
+                    + ' <div class="btn-group">'
+                    + '<a class="btn btn-sm btn-secondary' + (row_data.email !== '' ? '' : ' disabled') + '" title="' + '##EMAIL_USER_AT_0_##'.format(row_data.email) + '" href="mailto:' + row_data.email + '"' + (row_data.email !== '' ? '' : ' disabled') + '><i class="fa fa-envelope-o"></i></a>'
+                    + '<a class="btn btn-sm btn-secondary' + (row_data.mobile_no !== '' ? '' : ' disabled') + '" title="' + '##CALL_USER_AT_0_##'.format(row_data.mobile_no) + '" href="tel:' + row_data.mobile_no + '"' + (row_data.mobile_no !== '' ? '' : ' disabled') + '><i class="fa fa-phone"></i></a>'
+                    + '</div> '
+            }
+            //endregion
+
+            //region function account_type_cell_formatter(...)
+            function account_type_cell_formatter(cell) {
+                const cell_value = cell.getValue();
+                return cell_value === 'U' ? '<i class="fa fa-user" title="##USER##"></i>' : '<i class="fa fa-microchip" title="##APPLICATION##"></i>'
+
+
+            }
+            //endregion
+
+            //region function date_modified_cell_formatter(...)
+            function created_by_cell_formatter(cell) {
+
+                function format_date(value) {
+                    if (!value)
+                        return '';
+                    return value.substring(0, 16);
+
+                }
+
+                const row_data = cell.getRow().getData();
+                return row_data.modified_by === '' ?
+                    '<div title="##CREATED_BY## &quot;' + row_data.created_by + '&quot;">' + format_date(row_data.date_created) + '</div>' :
+                    '<div title="##MODIFIED_BY## &quot;' + (row_data.modified_by ?? '') + '&quot;,\n##CREATED_BY## &quot;' + row_data.created_by + '&quot; ##AT## ' + row_data.date_created + '">' + format_date(row_data.date_modified) + '</div>';
+            }
+            //endregion
+
+            //region function validate(...)
+            function validate(p) {
+                let message = '';
+                if (p.username === '')
+                    message += '##ERROR_USERNAME_IS_REQUIRED##\n';
+                if (p.cmd === 'admin.users.add') {
+                    if (p.password === '')
+                        message += '##ERROR_PASSWORD_IS_REQUIRED##\n';
+                } else {
+                    if (p.organization_id.trim() === '')
+                        message += '##ERROR_ORGANIZATION_IS_REQUIRED##.\n';
+                }
+                if (message !== '') {
+                    displayMessage('error', '##ERROR##', message);
+                    return false;
+                }
+                return true;
+            }
+            //endregion
+
+            //region function show_add_user_dlg()
+            function show_add_user_dlg() {
+                $dlg_title.text('Add User')
+                $edt_username.val('').attr('disabled', false);
+                $edt_organization.val(activeNode.k).attr('disabled', true);
+                $edt_password.val('')
+                    .attr('placeholder', '##PASSWORD##')
+                    .attr('aria-label', '##PASSWORD##')
+                    .attr('required', true);
+                $edt_account_type.val('U');
+                $edt_real_name.val('');
+                $edt_mobile_no.val('');
+                $edt_email.val('');
+                $edt_comments.val('');
+                $edt_existing_roles.val('');
+                $edt_user_roles.val('');
+                $dlg_Add_Edit.show();
+            }
+            //endregion
+
+            //region function show_edit_user_dlg(...)
+            function show_edit_user_dlg(user_data) {
+                $dlg_title.text('Edit User')
+                $edt_username.val(user_data.username).attr('disabled', true);
+                $edt_organization.val(user_data.organization_id).attr('disabled', false);
+                $edt_password.val('')
+                    .attr('placeholder', '##PASSWORD_LEAVE_EMPTY_TO_KEEP_CURRENT_PASSWORD##')
+                    .attr('aria-label', '##PASSWORD_LEAVE_EMPTY_TO_KEEP_CURRENT_PASSWORD##')
+                    .attr('required', false);
+                $edt_account_type.val(user_data.account_type);
+                $edt_real_name.val(user_data.real_name);
+                $edt_mobile_no.val(user_data.mobile_no);
+                $edt_email.val(user_data.email);
+                $edt_comments.val(user_data.comment);
+                $edt_existing_roles.val('');
+                let roles_for_node = get_roles_for_organization(activeNode.k);
+                //TODO fill roles with function to show removed roles in red with star and others as normal
+                let $html = '';
+                for (let role_name of user_data.roles) {
+                    for (let role of roles_for_node) {
+                        if (role_name === role.name) {
+                            $html += '<option value="' + role.name + '">' + role.name + '@' + (role.domain === '' ? 'Root' : role.domain) + '</option>';
+                        }
+                    }
+                }
+                $edt_user_roles.html($html);
+                $dlg_Add_Edit.show();
+            }
+            //endregion
+
+            //region function show_explicit_permissions_dlg(...)
+            function show_explicit_permissions_dlg(user_data) {
+                $edt_explicit_username.val(user_data.username);
+                $permission_tree.tree('set-checked', user_data.permissions);
+                $dlg_explicit.show();
+            }
+            //endregion
+
+            //region function change_user_status(...)
+            function change_user_status(user_data, status) {
+                if (!confirm('##THIS_WILL_CHANGE_USER_STATUS_0_TO_1_CONTINUE##'.format(user_data.username , status)))
+                    return false;
+                let p = {
+                    cmd: 'admin.users.set_status',
+                    username: user_data.username,
+                    status: status
+                }
+                hideMessage();
+                ajax('', p, () => {
+                    get_users_for_organization(activeNode.k);
+                });
+            }
+            //endregion
+
+            //region function delete_user(...)
+            function delete_user(user_data) {
+                if (!confirm('##ARE_YOU_SURE_YOU_WANT_TO_DELETE_0_##'.format(user_data.username)))
+                    return false;
+                let p = {
+                    cmd: 'admin.users.delete',
+                    username: user_data.username
+                }
+                hideMessage();
+                ajax('', p, () => {
+                    get_users_for_organization(activeNode.k);
+                });
+            }
+            //endregion
+
+            //region function row_click(...)
+            function row_click(e, row) {
+                let row_data = row.getData();
+                // current user cannot be edited
+                if (data_current_user.username === row_data.username) {
+                    displayMessage('error', '##ERROR##', '##ERROR_CURRENT_USER_CANNOT_BE_EDITED##');
+                    return false;
+                }
+                let $elem = $(e.target);
+                if (e.target.tagName === 'I')
+                    $elem = $(e.target).parent();
+                if ($elem.hasClass('edit')) {
+                    show_edit_user_dlg(row_data);
+                } else if ($elem.hasClass('delete')) {
+                    delete_user(row_data);
+                } else if ($elem.hasClass('explicit')) {
+                    show_explicit_permissions_dlg(row_data);
+                } else if ($elem.hasClass('activate')) {
+                    change_user_status(row_data, 'active');
+                } else if ($elem.hasClass('unlock')) {
+                    change_user_status(row_data, 'unlock');
+                } else if ($elem.hasClass('ban')) {
+                    change_user_status(row_data, 'banned');
+                }
+            }
+            //endregion
+
+            //region function generate_password()
+            function generate_password() {
+                const alphac = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const alphal = 'abcdefghijklmnopqrstuvwxyz';
+                const digits = '0123456789';
+                const symbols = '!@#$%&*';
+                let phrase = '';
+                for (let i = 0; i < 16; i++) {
+                    switch (random(0, 4)) {
+                        case 0:
+                            phrase += alphac[random(0, alphac.length)];
+                            break;
+                        case 1:
+                            phrase += alphal[random(0, alphal.length)];
+                            break;
+                        case 2:
+                            phrase += digits[random(0, digits.length)];
+                            break;
+                        case 3:
+                            phrase += symbols[random(0, symbols.length)];
+                            break;
+                    }
+                }
+                return phrase;
+            }
+            //endregion
+
+            //region Retrieve page data
+            $.when(
+                //region Get organization data for current user and build domain names and tree
+                ajax('', {cmd: 'admin.organizations.list'}, data => {
+                    org_data = data;
+
+                    //region function get_domain_name()
+                    function get_domain_name(parent_id) {
+                        if (!parent_id) {
+                            return '';
+                        }
+                        for (let org of org_data) {
+                            if (org.k === parent_id)
+                                return org.n + '.' + get_domain_name(org.p);
+                        }
+                    }
+                    //endregion
+
+                    // build domain and reverse domain names
+                    for (let org of org_data) {
+                        org.domain = org.p ? (org.n + '.' + get_domain_name(org.p).toLocaleLowerCase()).replace('.root', '').trimX('.') : '';
+                        org.reverse_domain = org.domain.split('.').reverse().join('.');
+                    }
+                    $organization_tree.tree('create', {data: org_data, dragdrop: false}, tree_actions)
+                    root = $organization_tree.tree('get-root');
+                    fill_organization_list();
+                }),
+                //endregion
+                //region Build permission tree from flat permissions array and build permission tree
+                ajax('', {cmd: 'admin.users.permissions'}, function (data) {
+                    user_permissions = [];
+                    for (let permission in data) {
+                        if (permission.indexOf('.') > -1) {
+                            //region permission key has a parent
+                            let chunks = permission.split('.');
+                            let parent = '';
+                            let key = '';
+                            for (let chunk of chunks) {
+                                key += chunk + '.';
+                                user_permissions.push({
+                                    k: key.trimX('.'),
+                                    p: parent.trimX('.'),
+                                    n: key.trimX('.'),
+                                    d: key === permission ? data[permission] : translate('#' + '#' + chunk + '#' + '#') // do not combine, it will confuse translation tag collector
+                                });
+                                parent += chunk + '.';
+                            }
+                            //endregion
+                        } else {
+                            //region permission key doesn't have parent
+                            user_permissions.push({
+                                k: permission,
+                                p: '',
+                                n: permission,
+                                d: data[permission]
+                            });
+                            //endregion
+                        }
+                    }
+
+                    //region Remove duplicate parent nodes
+                    user_permissions = user_permissions.filter((value, index, self) =>
+                            index === self.findIndex((t) =>
+                                t.k === value.k
+                                && t.p === value.p
+                                && t.n === value.n
+                                && t.d === value.d
+                            )
+                    )
+                    //endregion
+
+                    // build tree
+                    $permission_tree.tree('create', {data: user_permissions, checkboxes: true, icons: false, dragdrop: false})
+                })
+                //endregion
+            ).done(function () {
+                // we need organization data before building rest of the data
+                //region Get all available roles for current user
+                ajax('', {cmd: 'admin.roles.list'}, function (data) {
+
+                    //region function get_domain_name()
+                    function get_domain_name(id) {
+                        for (let org of org_data) {
+                            if (org.k === id) {
+                                return {
+                                    domain: org.domain === '' ? org.n : org.domain,
+                                    reverse_domain: org.reverse_domain
+                                };
+                            }
+                        }
+                        return {
+                            domain: '^',
+                            reverse_domain: '^'
+                        };
+                    }
+                    //endregion
+                    roles = data;
+                    for (let role of roles) {
+                        let d = get_domain_name(role.organization_id);
+                        role.domain = d.domain;
+                        role.reverse_domain = d.reverse_domain;
+                    }
+                    fill_roles_list();
+                    $organization_tree.tree('set-active-node', root.k);
+                });
+                //endregion
+            });
+            //endregion
+
+            //region Create users Grid
+            const tbl_columns = [
+                {title: '', field: 'username', width: 228, hozAlign: 'center', formatter: id_cell_formatter},
+                {title: '', field: 'account_type', width: 36, hozAlign: 'center', formatter: account_type_cell_formatter},
+                {title: '##USERNAME##', field: 'username', width: 130},
+                {title: '##ORGANIZATION##', field: 'domain', width: 150},
+                {title: '##NAME##', field: 'real_name', width: 120},
+                {title: '##ROLES##', field: 'roles', width: 120},
+                {title: '##LAST_LOGIN##', field: 'date_logged_in', hozAlign: 'center', width: 145},
+                {title: '##CREATED_BY##', field: 'created_by', width: 145, hozAlign: 'center', formatter: created_by_cell_formatter},
+                {title: '##COMMENT##', field: 'comment', width: 100}
+            ];
+            table = createGrid('#grid', {row_click: row_click, columns: tbl_columns, initialSort: [{column: 'username', dir: 'asc'}]});
+            //endregion
+
+            //region Bind button events for edit dialog
+            $('#dlg_Add_Edit .modal-body').on('click', '.btn', function (e) {
+                let $this = $(e.target);
+                if (e.target.tagName === 'I')
+                    $this = $this.parent();
+                if ($this.hasClass('add-role')) {
+                    const role = $edt_existing_roles.val();
+                    if (role === '')
+                        return false;
+                    const the_role = $edt_existing_roles.find('option[value="' + role + '"]').prop('outerHTML');
+                    const has_role = $edt_user_roles.find('option[value="' + role + '"]').length > 0;
+                    if (has_role)
+                        return false;
+                    $edt_user_roles.html($edt_user_roles.html() + the_role);
+                } else if ($this.hasClass('delete-role')) {
+                    $edt_user_roles.find('option:selected').remove();
+                } else if ($this.hasClass('generate-password')) {
+                    $edt_password.val(generate_password());
+                }
+            });
+            //endregion
+
+            //region Bind node_only click event (checkbox to show all roles or just roles for selected organization) checkbox event
+            $edt_node_only.change(function () {
+                if (!activeNode)
+                    return;
+                $organization_tree.tree('set-active-node', activeNode.k);
+            });
+            //endregion
+
+            //region Bind search box event
+            let search_timer = undefined;
+            $edt_search.keyup((e) => {
+                $edt_search.siblings('span').find('I').attr('class', 'fa fa-spin-ccw fa-spinner')
+                if (search_timer) {
+                    clearTimeout(search_timer);
+                }
+                search_timer = setTimeout(function () {
+                    $edt_search.siblings('span').find('I').attr('class', 'fa fa-search')
+                    $organization_tree.tree('set-active-node', activeNode.k);
+                    search_timer = undefined;
+                }, 500)
+            });
+            //endregion
+
+            //region Bind click event for Add button
+            $('.btnAdd').click(show_add_user_dlg)
+            //endregion
+
+            //region Bind click event of ok button in Add/Edit dialog
+            $('.btn-ok').click(() => {
+                let roles = [];
+                $edt_user_roles.find('option').each(function () {
+                    roles.push(this.value);
+                });
+                let p = {
+                    cmd: 'admin.users.add',
+                    organization_id: activeNode.k,
+                    username: $edt_username.val().trim(),
+                    password: $edt_password.val().trim(),
+                    account_type: $edt_account_type.val(),
+                    real_name: $edt_real_name.val().trim(),
+                    mobile_no: $edt_mobile_no.val().trim(),
+                    email: $edt_email.val().trim(),
+                    comment: $edt_comments.val().trim(),
+                    roles: roles
+                }
+                if ($edt_username.is(':disabled')) {
+                    //This is edit action
+                    p.cmd = 'admin.users.edit';
+                    p.organization_id = $edt_organization.val();
+                }
+                if (!validate(p))
+                    return false;
+                hideMessage();
+                ajax('', p, () => {
+                    get_users_for_organization(activeNode.k);
+                    $dlg_Add_Edit.hide();
+                });
+            });
+            //endregion
+
+            //region Bind click event of ok button in Explicit Permissions dialog
+            $('.btn-explicit-ok').click(() => {
+                let p = {
+                    cmd: 'admin.users.explicit_permissions',
+                    username: $edt_explicit_username.val(),
+                    permissions: $permission_tree.tree('get-checked')
+                }
+                hideMessage();
+                ajax('', p, () => {
+                    get_users_for_organization(activeNode.k);
+                    $dlg_explicit.hide();
+                });
+            });
+            //endregion
+
+            buildExportMenu(table, '%%TITLE%%');
+        });
+    </script>
+    <!--HEADER%%-->
+</head>
+<body>
+    <!--%%BODY-->
+    <div class="row page-header pb-2">
+        <div class="col flex-grow-1">
+            <ul class="breadcrumb m-0 d-print-none" aria-label="##BREADCRUMB##">
+                <li class="breadcrumb-item"><a href="/">##HOME##</a></li>
+                <li class="breadcrumb-item" aria-current="page">##ADMIN##</li>
+            </ul>
+            <div class="d-flex flex-row flex-wrap flex-sm-nowrap justify-content-between align-items-center">
+                <div class="flex-grow-1">
+                    <h3 class="fw-bold">##USERS##</h3>
+                </div>
+                <div aria-label="Page actions" class="pgActions d-flex flex-nowrap flex-row d-print-none">
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" id="edt_node_only" type="checkbox" checked>
+                        <label class="form-check-label text-nowrap" for="edt_node_only">##ONLY_CURRENT_NODE_USERS##</label>
+                    </div>
+                    <div class="input-group mx-1">
+                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                        <input type="text" class="form-control edtSearch" placeholder="##SEARCH##" aria-label="##SEARCH##">
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary mx-1 btnAdd" title="##ADD##"><i class="fa fa-plus"></i></button>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">##EXPORT##</button>
+                        <div class="dropdown">
+                            <ul class="dropdown-menu mnu-export"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="box box-primary">
+        <div class="box-body row">
+            <div class="full-height col-fa-12 col-lg-2 overflow-auto">
+                <div class="tree organization-tree"></div>
+            </div>
+            <div class="page-content col-fa-12 col-lg-10">
+                <div id="grid" class="striped"></div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="dlg_Add_Edit" tabindex="-1" aria-labelledby="dlg_add_edit_title" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="dlg_add_edit_title">##ADD_USER##</h1>
+                    <button type="button" class="btn-close btn-cancel" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <input type="text" class="form-control mb-1" id="edt_username" placeholder="##USERNAME##" aria-label="##USERNAME##" maxlength="32" required/>
+                            <div class="input-group mb-1">
+                                <span class="input-group-text">@</span>
+                                <select class="form-select" id="edt_organization" aria-label="##ORGANIZATION##" title="##ORGANIZATION##">
+                                    <option value="" disabled>##ORGANIZATION##</option>
+                                    <option value="">ROOT</option>
+                                </select>
+                            </div>
+                            <div class="input-group mb-1">
+                                <input type="text" class="form-control" id="edt_password" aria-label="##PASSWORD_LEAVE_EMPTY_TO_KEEP_CURRENT_PASSWORD##" placeholder="##PASSWORD_LEAVE_EMPTY_TO_KEEP_CURRENT_PASSWORD##" minlength="6" maxlength="32"/>
+                                <button class="btn btn-outline-secondary generate-password" type="button" id="" aria-label="Generate" title="Generate"><i class="fa fa-magic"></i></button>
+                            </div>
+                            <select class="form-select mb-1" id="edt_account_type" aria-label="##ACCOUNT_TYPE##" title="##ACCOUNT_TYPE##">
+                                <option value="U">##USER##</option>
+                                <option value="A">##APPLICATION##</option>
+                            </select>
+                            <input type="text" class="form-control mb-1" id="edt_real_name" placeholder="##REAL_NAME##" aria-label="##REAL_NAME##" maxlength="100"/>
+                            <input type="text" class="form-control mb-1" id="edt_mobile_no" placeholder="##MOBILE_NUMBER##" aria-label="##MOBILE_NUMBER##" maxlength="32"/>
+                            <input type="text" class="form-control mb-1" id="edt_email" placeholder="##EMAIL##" aria-label="##EMAIL##" maxlength="32"/>
+                            <textarea class="form-control" id="edt_comments" rows="2" placeholder="##COMMENTS##" aria-label="##COMMENTS##"></textarea>
+                        </div>
+                        <div class="col-lg-6">
+                            <select id="edt_existing_roles" class="form-select" aria-label="##AVAILABLE_ROLES##"></select>
+                            <div class="d-flex flex-row m-2">
+                                <label class="flex-grow-1" id="lbl_user_roles" for="edt_user_roles">##ROLES##</label>
+                                <div>
+                                    <button class="btn btn-sm btn-secondary add-role" aria-label="##ADD##" title="##ADD##"><i class="fa fa-caret-down"></i></button>
+                                    <button class="btn btn-sm btn-secondary delete-role" aria-label="##REMOVE##" title="##REMOVE##"><i class="fa fa-caret-up"></i></button>
+                                </div>
+                            </div>
+                            <select id="edt_user_roles" class="form-select" size="13" aria-labelledby="lbl_user_roles" aria-required="true"></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-ok">##OK##</button>
+                    <button type="button" class="btn btn-secondary btn-cancel" data-bs-dismiss="modal">##CANCEL##</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="dlg_explicit" tabindex="-1" aria-labelledby="dlg_add_edit_title" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="dlg_explicit_title">##EXPLICIT_PERMISSIONS##</h1>
+                    <button type="button" class="btn-close btn-cancel" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div>##USERNAME##</div>
+                    <input type="text" class="form-control mb-1" id="edt_explicit_username" aria-label="##USERNAME##" disabled/>
+                    <div>##PERMISSIONS##</div>
+                    <div class="tree permissions-tree"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-explicit-ok">##OK##</button>
+                    <button type="button" class="btn btn-secondary btn-explicit-cancel" data-bs-dismiss="modal">##CANCEL##</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--BODY%%-->
+</body>
+</html>

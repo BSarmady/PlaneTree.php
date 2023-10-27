@@ -1,0 +1,56 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="cc.css">
+    <title>Creative Common Icons</title>
+    <style>
+        body{ font-family:roboto, tahoma, arial, serif; }
+        h3{ padding:10pt 0 5pt; margin:0 }
+        body > div{ display:flex; flex-direction:row; flex-wrap:wrap; border-top:1px solid #666666; }
+        div > span{ text-decoration:none; width:240px; padding:5px; margin:5px; color:inherit; border:1px solid #666666; display:flex; flex-direction:row; flex-wrap:wrap; cursor:pointer; align-items:center;align-content:stretch }
+        div > span:hover{ width:240px; padding:5px; margin:5px; border:1px solid #ff9933; background-color:#ffcc33 }
+        i{ padding:5px; margin:5px; }
+
+        .cc{ display:inline-block; font:normal normal normal 14px/1 CCSymbols, Arial, serif; font-size:inherit; text-rendering:auto; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+        .cc-3x{ font-size:3em; }
+    </style>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function () {
+            body.addEventListener('click', function (e) {
+                let element = event.target;
+                if (element.tagName !== 'SPAN' && element.tagName !== 'I')
+                    return true;
+                if (element.tagName === 'SPAN')
+                    element = element.getElementsByTagName('I')[0];
+                let item = element.outerHTML;
+                if (item) {
+                    let dummy = document.createElement("textarea");
+                    document.body.appendChild(dummy);
+                    dummy.value = item.replace('cc-3x ', '').replace(' red', '');
+                    dummy.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(dummy)
+                }
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        })
+    </script>
+</head>
+<body>
+    <h2 class="page-header">Font Icons</h2>
+    <p>Click on icons to copy to clipboard</p>
+    <div>
+        <span><i class="cc cc-3x">&#xa9;</i>&amp;#xa9;</span>
+        <span><i class="cc cc-3x">&#x229c;</i>&amp;#x229c;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f10d;</i>&amp;#x1f10d;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f10e;</i>&amp;#x1f10e;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f10f;</i>&amp;#x1f10f;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f16d;</i>&amp;#x1f16d;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f16e;</i>&amp;#x1f16e;</span>
+        <span class="border"><i class="cc cc-3x">&#x1f16f;</i>&amp;#x1f16f;</span>
+    </div>
+</body>
+</html>

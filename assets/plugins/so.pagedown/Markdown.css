@@ -1,0 +1,21 @@
+.wmd-panel{ }
+
+.wmd-button-bar{}
+
+.wmd-input{ height:300px; width:100%; }
+
+.wmd-preview{}
+
+.wmd-button-row{ position:relative; margin:10px 5px 5px;padding:0; height:20px;}
+
+.wmd-spacer{ width:1px; height:20px; margin-inline-start:14px; position:absolute; background-color:Silver; display:inline-block; list-style:none;}
+.wmd-button{ width:20px; height:20px; padding-inline-start:2px; padding-inline-end:3px; position:absolute; display:inline-block; list-style:none; cursor:pointer;}
+.wmd-button > span{ background-image:url(wmd-buttons.svg); background-repeat:no-repeat; background-position:0 0; width:20px; height:20px; display:inline-block;}
+.wmd-spacer1{ inset-inline-start:50px;}
+.wmd-spacer2{ inset-inline-start:175px;}
+.wmd-spacer3{ inset-inline-start:300px;}
+.wmd-prompt-background{}
+.wmd-prompt-dialog{ border:var(--bs-border-width) var(--bs-border-style) var(--bs-border-color); background-color:var(--bs-body-bg);}
+.wmd-prompt-dialog > div{ font-size:0.8em; }
+.wmd-prompt-dialog > form > input[type="text"]{ }
+.wmd-prompt-dialog > form > input[type="button"]{ }

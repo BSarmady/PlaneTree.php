@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>##SIGN_IN##</title>
+    <meta name="template" content="blank"/>
+    <meta charset="utf-8"/>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <!--%%HEADER-->
+    <script type="text/javascript">
+        $(function () {
+
+            //region consts
+            let settings = null;
+
+            let $signInForm = $('#signInForm');
+            let $divSignIn = $('#divSignIn');
+            let $singleStepControls = $('.single-step');
+            let $step1Controls = $('.step-1');
+            let $step2Controls = $('.step-2');
+            let $captchaControls = $('.captcha');
+
+            let $lblMessage = $('#lblMessage');
+            let $imgLoading = $('#imgLoading');
+            let $imgCaptcha = $('#imgCaptcha');
+            let $imgSecurity = $('#imgSecurity');
+
+            let $edtCaptcha = $('#edtCaptcha');
+            let $edtUsername = $('#edtUsername');
+            let $edtPassword = $('#edtPassword');
+            let $edtUsername1 = $('#edtUsername1');
+            let $btnNext = $('#btnNext');
+            let $btnSignIn = $('#btnSignIn');
+            let $btnBack = $('#btnBack');
+            //endregion
+
+            //region function DisplayMessage(...)
+            // override method defined in blank template
+            function displayMessage(type, caption, message, auto_close) {
+                hideMessage();
+                $lblMessage.html('<div class="alert alert-'
+                    + (type === 'error' ? 'danger' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info')
+                    + '" role="alert">' + message.replace(/\n/g, '<br />') + '</div>'
+                );
+            }
+            //endregion
+
+            //region function hideMessage(...)
+            function hideMessage() {
+                $lblMessage.html('');
+            }
+            //endregion
+
+            //region function ResetSignIn(...)
+            function ResetSignIn() {
+                /*              step-1  step-2  single-step
+                edtUsername     *       X       *
+                captcha         *       X       *
+                security_image  X       *       X
+                btnNext         *       X       X
+                edtPassword     X       *       *
+                btnForgot       X       *       *
+                btnBack         X       *       X
+                btnSignIn       X       *       *
+
+                SignInParams onload or when back is pressed
+                SignIn(step1)
+                */
+
+                //region function getCaptcha()
+                function getCaptcha() {
+                    $imgCaptcha.attr('src', '');
+                    if (data_app_config.captcha) {
+                        ajax('', {cmd: "users.captcha"}, function (data) {
+                            // to make sure captcha will reset everytime sign in form is reset
+                            $imgCaptcha.attr('src', data.image).show();
+                        }, function (data) {
+                            if (data.error)
+                                displayMessage('error', '', data.error);
+                            else
+                                displayMessage('error', '', data);
+                        });
+                        $captchaControls.removeClass('d-none');
+                    } else {
+                        $captchaControls.addClass('d-none');
+                    }
+                }
+                //endregion
+
+                $edtCaptcha.val('');
+                $step1Controls.hide();
+                $step2Controls.hide();
+                $singleStepControls.hide();
+                $imgSecurity.attr('src', '');
+                getCaptcha();
+                if (data_app_config.twostep) {
+                    $step1Controls.show();
+                    $step2Controls.hide();
+                } else {
+                    $singleStepControls.show();
+                }
+                $imgLoading.removeClass('d-grid').addClass('d-none');
+                $divSignIn.fadeIn(400, function () {
+                    $edtUsername.focus();
+                });
+            }
+            //endregion
+
+            //region function btnNextClick(...)
+            function btnNextClick(e) {
+                let p = {
+                    cmd: "users.sign_in",
+                    step: 1,
+                    username: $edtUsername.val(),
+                    captcha: $edtCaptcha.val()
+                };
+                if (!p.username || p.username === '') {
+                    displayMessage('error', '', '##ERROR_USERNAME_IS_REQUIRED##');
+                    return false;
+                }
+                $btnNext.attr('disabled', true).addClass('wait');
+                ajax('', p, function (data) {
+                    hideMessage();
+                    $step1Controls.hide();
+                    $edtUsername1.val($edtUsername.val());
+                    $imgSecurity.attr('src', data.image);
+                    $step2Controls.show();
+                    $edtPassword.focus();
+                }, function (error) {
+                    displayMessage('error', '', error);
+                    ResetSignIn();
+                });
+            }
+            //endregion
+
+            //region function step1Submit()
+            function step1Submit() {
+                let p = {
+                    cmd: "users.sign_in",
+                    username: $edtUsername.val(),
+                    captcha: $edtCaptcha.val(),
+                    password: $edtPassword.val(),
+                };
+                if (!p.username || p.username === '') {
+                    displayMessage('error', '', 'Username and password are required');
+                    return false;
+                }
+                $btnSignIn.attr('disabled', true).addClass('wait');
+                ajax('', p, function (data) {
+                    displayMessage('success', '', data.message);
+                    if (data.redirect.toLowerCase().indexOf('http') === 0)
+                        data.redirect += '?token=' + data.token;
+                    location = data.redirect;
+                }, function (error) {
+                    displayMessage('error', '', error);
+                    ResetSignIn();
+                });
+            }
+            //endregion
+
+            //region function step2Submit()
+            function step2Submit() {
+                let p = {
+                    cmd: "users.sign_in",
+                    step: 2,
+                    password: $edtPassword.val(),
+                };
+                if (!p.password || p.password === '') {
+                    displayMessage('error', '', '##ERROR_PASSWORD_IS_REQUIRED##');
+                    return false;
+                }
+                $btnSignIn.attr('disabled', true).addClass('wait');
+                $btnBack.hide();
+                ajax('', p, function (data) {
+                    displayMessage('success', '', data.message);
+                    if (data.redirect.toLowerCase().indexOf('http') === 0)
+                        data.redirect += '?token=' + data.token;
+                    location = data.redirect;
+                }, function (error) {
+                    displayMessage('error', '', error);
+                    ResetSignIn();
+                });
+            }
+            //endregion
+
+            if (window.top !== window.self)
+                window.top.location = location;
+
+            ResetSignIn();
+
+            //region signInForm.submit
+            $signInForm.submit(function (e) {
+                if ($btnNext.is(':visible')) {
+                    btnNextClick(e);
+                } else if ($btnBack.is(':visible')) {
+                    step2Submit();
+                } else {
+                    step1Submit()
+                }
+                e.preventDefault();
+                return false;
+            });
+            //endregion
+
+            //region edtUsername.keypress
+            $edtUsername.keypress(function (e) {
+                if (e.which === 13) {
+                    if ($btnNext.is(':visible'))
+                        $btnNext.click();
+                    else
+                        $edtPassword.focus();
+                    e.preventDefault();
+                    return false;
+                }
+            });
+            //endregion
+
+            //region edtPassword.keyup
+            $edtPassword.keyup(function (e) {
+                if (e.which === 13) {
+                    $btnSignIn.click();
+                    e.preventDefault();
+                    return false;
+                }
+            });
+            //endregion
+        });
+    </script>
+    <!--HEADER%%-->
+</head>
+<body>
+    <!--%%BODY-->
+    <div class="d-grid min-vh-100 justify-content-center align-items-center">
+        <div class="container">
+            <img src="/assets/images/splash.png" width="320" height="200" class="rounded-3">
+
+            <div id="lblMessage" class="my-3 text-center"></div>
+            <div id="divSignIn" style="display:none">
+                <form id="signInForm">
+                    <div class="mb-3 text-danger"><i class="fa fa-2x fa-user-circle-o"></i> ##USER_SIGN_IN##</div>
+                    <div class="mb-3 step-1 single-step">
+                        <input type="text" class="form-control" id="edtUsername" name="username" maxlength="32" placeholder="##USERNAME##" aria-label="##USERNAME##" required/>
+                    </div>
+                    <div class="mb-3 step-2">
+                        <input type="text" class="form-control" id="edtUsername1" maxlength="32" placeholder="##USERNAME##" aria-label="##USERNAME##" disabled/>
+                    </div>
+                    <div class="mb-1 step-1 single-step captcha text-center">
+                        <div class="mb-3"><img id="imgCaptcha" class="border-2 rounded-1" src="" alt="##CAPTCHA##"/></div>
+                    </div>
+                    <div class="mb-3 step-1 single-step captcha">
+                        <input type="text" class="form-control" id="edtCaptcha" autocomplete="off" maxlength="6" placeholder="##ENTER_THE_CAPTCHA_CODE##" aria-label="##ENTER_THE_CAPTCHA_CODE##"/>
+                    </div>
+                    <div class="mb-3 step-2"><img id="imgSecurity" class="border-2 rounded-1" src="" style="width:250px;height:120px" alt="##SECURITY_IMAGE##"/></div>
+                    <div class="mb-3 step-2 single-step">
+                        <input class="form-control" type="password" id="edtPassword" name="password" maxlength="32" aria-label="##PASSWORD##" placeholder="##PASSWORD##"/>
+                    </div>
+                    <div class="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div style="margin-right: auto"><a class="btn-link btn-link text-decoration-none btnForgot step-2 single-step" href="users/forgot_password"><b>##FORGOT_PASSWORD##</b></a></div>
+                        <button id="btnNext" type="submit" class="btn btn-primary step-1">##NEXT##</button>
+                        <button id="btnBack" type="button" class="btn btn-secondary step-2">##BACK##</button>
+                        <button id="btnSignIn" type="submit" class="btn btn-primary step-2 single-step">##SIGN_IN##</button>
+                    </div>
+                </form>
+            </div>
+            <div id="imgLoading" class="text-center">
+                <i class="fa fa-spin-ccw fa-spinner"></i>
+            </div>
+        </div>
+    </div>
+    <!--BODY%%-->
+</body>
+</html>

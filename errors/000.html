@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <title>Server Error</title>
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico"/>
+    <link rel="stylesheet" href="/assets/fonts/font-awesome/4.7.0.min.css">
+    <link rel="stylesheet" href="/assets/plugins/bootstrap-5.3.1/bootstrap.css">
+    <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+    <header class="d-print-none" style="position:relative; z-index:1000">
+        <nav class="navbar navbar-theme navbar-dark navbar-expand-lg shadow-sm mb-1">
+            <div class="container-fluid justify-content-start">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><i class="navbar-toggler-icon"></i></button>
+                <div class="ms-3 ms-lg-0">
+                    <a class="navbar-brand" href="/"><img src="/assets/images/logo.png" alt="logo" width="48" height="48"> %%APP_NAME%%</a>
+                </div>
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                    <div class="flex-grow-1">
+                        <ul class="navbar-nav mb-2 mb-lg-0 top-menu"></ul>
+                    </div>
+                    <form class="d-flex" role="search" action="/search" method="get">
+                        <div class="input-group">
+                            <input type="search" class="form-control" name="q" placeholder="Search" aria-label="Search" aria-describedby="btn-search" required>
+                            <button class="btn btn-secondary" type="submit" id="btn-search"><i class="fa fa-search"></i></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="content d-flex align-items-center justify-content-center ">
+        <div class="text-center">
+            <h1>Server Error</h1>
+            <img src="/assets/images/000.svg" alt="000"/>
+            <h2>Internal server error.</h2>
+            <h3>There is a problem with the application you are looking for, and it cannot be displayed.</h3>
+            <h4><a href="/">Return Home</a>.</h4>
+        </div>
+    </div>
+    <footer class="navbar navbar-theme navbar-dark py-1 d-print-none" style="position:relative; z-index:1000">
+        <div class="container-fluid justify-content-end">
+            <div class="row">
+                <div class="col navbar-text">%%COPYRIGHT_NOTICE%%</div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

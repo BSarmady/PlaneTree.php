@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="template" content="index"/>
+    <meta charset="utf-8"/>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>Organizations</title>
+    <meta name="menu" content="order=60;icon=fa fa-bank"/>
+    <!--%%HEADER-->
+    <link rel="stylesheet" type="text/css" href="/assets/plugins/tree/tree.min.css"/>
+    <script type="text/javascript" src="/assets/plugins/tree/tree.js"></script>
+    <script type="text/javascript">
+        $(function () {
+
+            //region Constants and local variables
+            let active_node = null;
+            let org_data = [];
+            let root = null
+
+            const $tree = $(".tree");
+            const $_content = $('.page-content');
+            const $edt_id = $('#edt_id');
+            const $edt_name = $('#edt_name');
+            const $edt_description = $('#edt_description');
+            const $edt_parent_node = $('#edt_parent_node');
+            const $dlg_title = $('#dlg_add_edit_title');
+            let dlg_Add_Edit = new bootstrap.Modal('#dlg_Add_Edit');
+            //endregion
+
+            //region function tree_actions(...)
+            function tree_actions(event, target_node, dest_node) {
+                const $btnDelete = $('.btnDelete');
+                const $btnEdit = $('.btnEdit');
+
+                //region function disableDelete(...)
+                function disableDelete(node_id) {
+                    for (let node of org_data) {
+                        if (node.p === node_id) {
+                            $btnDelete.attr('disabled', true);
+                            return;
+                        }
+                    }
+                    $btnDelete.removeAttr('disabled');
+                }
+                //endregion
+
+                if (event === 'click') {
+                    if (target_node) {
+                        active_node = target_node;
+                        $('.lblDescription').text(target_node.d);
+                        $('.lblName').text(target_node.n);
+                        if (root.k === target_node.k) {
+                            //disable edit and delete buttons
+                            $btnEdit.attr('disabled', true);
+                            $btnDelete.attr('disabled', true);
+                        } else {
+                            // enable edit
+                            $btnEdit.removeAttr('disabled');
+                            // if this node has children, disable delete
+                            disableDelete(target_node.k)
+                        }
+                    }
+                } else if (event === 'move') {
+                    let p = {
+                        cmd: 'admin.organizations.move',
+                        target: target_node.k,
+                        dest: dest_node.k,
+                    }
+                    active_node = target_node;
+                    ajax('', p, refresh_tree_data);
+                }
+            }
+            //endregion
+
+            //region function refresh_tree_data(...)
+            function refresh_tree_data(data) {
+                dlg_Add_Edit.hide();
+                org_data = data.slice();// create new instance of array
+                $tree.tree('set-data', data, tree_actions)
+                root = $tree.tree('get-root');
+                // if active node is not set set root as active node
+                if (!active_node)
+                    active_node = root;
+                // if active_node is set activate it (used to activate added or edited nodes)
+                if (active_node)
+                    $tree.tree('set-active-node', active_node.k);
+            }
+            //endregion
+
+            //region function findNodeById(...)
+            function findNodeById(id) {
+                if (org_data && org_data.length > 0) {
+                    for (let node of org_data) {
+                        if (node.k === id) {
+                            return node;
+                        }
+                    }
+                }
+                return null;
+            }
+            //endregion
+
+            //region function getNodeFullName(...)
+            function getNodeFullName(id) {
+                let node = findNodeById(id);
+                if (!node)
+                    return '';
+
+                return (node.n + '.' + getNodeFullName(node.p)).trimX('.');
+            }
+            //endregion
+
+            //region function search(...)
+            /**
+             *
+             * @param what  search string
+             * @param where boolean false = from start, true = continue
+             */
+            let searchChanged = true;
+            let searchStack = [];
+            function search(what, where = false) {
+                what = what.toLowerCase();
+                if (where) {
+                    searchStack = [];
+                }
+                searchChanged = false;
+                for (let node of org_data) {
+                    if (
+                        node.n.toLowerCase().indexOf(what) > -1 ||
+                        node.d.toLowerCase().indexOf(what) > -1 ||
+                        node.k === what
+                    ) {
+                        if (searchStack.indexOf(node.k) < 0) {
+                            searchStack.push(node.k);
+                            $tree.tree('set-active-node', node.k);
+                            return false; // we have found a match, stop traversal, next time user press search again we will find next
+                        }
+                    }
+                }
+                displayMessage('info', '', 'No more matches');
+            }
+            //endregion
+
+            //region Bind edit dialog Ok event
+            $('.btn-ok').click(() => {
+                let p = {
+                    cmd: 'admin.organizations.update',
+                    id: $edt_id.val(),
+                    parent_id: active_node.k,
+                    name: $edt_name.val(),
+                    description: $edt_description.val()
+                }
+                ajax('', p, refresh_tree_data);
+            });
+            $('#dlg_Add_Edit').on('shown.bs.modal', '', () => {
+                $edt_name.focus();
+            })
+            //endregion
+
+            //region Retrieve initial data
+            ajax('', {cmd: 'admin.organizations.list'}, data => {
+                org_data = data.slice();    // create new instance of array
+                $tree.tree('create', {data: org_data}, tree_actions)
+                root = $tree.tree('get-root');
+                $tree.tree('set-active-node', root.k);
+            });
+            //endregion
+
+            $('.pgActions')
+                //region .onKeypress(...)
+                .on('keyup', '.edtSearch', e => {
+                    if (e.which === 13)
+                        search(e.target.value);
+                    searchChanged = true;
+                })
+                //endregion
+                //region .onClick(...)
+                .on('click', 'button', e => {
+                    let $btn = $(e.target);
+                    // if clicked on icon, get parent which is the actual button
+                    if (e.target.tagName === 'I')
+                        $btn = $(e.target).parent();
+                    let handled = false;
+                    if ($btn.hasClass('btnSearch')) {
+
+                        //region Search nodes
+                        search($('.edtSearch').val(), searchChanged);
+                        handled = true;
+                        //endregion
+
+                    } else if ($btn.hasClass('btnAdd')) {
+
+                        //region Add Node
+                        if (!active_node)
+                            return alert("Please select a node");
+                        $dlg_title.text('Add Organization');
+                        $edt_id.val('')
+                        $edt_name.val('');
+                        $edt_description.val('');
+                        $edt_parent_node.text('.' + getNodeFullName(active_node.k))
+                        dlg_Add_Edit.show();
+                        handled = true;
+                        //endregion
+
+                    } else if ($btn.hasClass('btnEdit')) {
+
+                        //region Edit node
+                        if (!active_node)
+                            return alert("Please select a node");
+                        $dlg_title.text('Edit Organization');
+                        $edt_id.val(active_node.k)
+                        $edt_name.val(active_node.n);
+                        $edt_description.val(active_node.d);
+                        $edt_parent_node.text('.' + getNodeFullName(active_node.p))
+                        dlg_Add_Edit.show();
+                        handled = true;
+                        //endregion
+
+                    } else if ($btn.hasClass('btnDelete')) {
+
+                        //region Delete node
+                        if (!active_node)
+                            return alert("Please select a node");
+                        if (!confirm('Are you sure you want to delete "{0}"?'.format(active_node.d)))
+                            return false;
+                        const p = {
+                            cmd: 'admin.organizations.delete',
+                            id: active_node.k
+                        }
+                        active_node = findNodeById(active_node.p);
+                        ajax('', p, refresh_tree_data);
+                        handled = true;
+                        //endregion
+
+                    }
+                    if (handled) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                })
+            //endregion
+
+            //region Resize page_content section to fill the view
+            let resize_timer = undefined;
+            function resize_content(e, o, nowait = false) {
+                if (resize_timer) {
+                    clearTimeout(resize_timer);
+                }
+                resize_timer = setTimeout(function () {
+                    let height = ($(window).height() - $('.top-nav').height() - $('.page-header').height() - $('.footer').outerHeight() - 92); // 92 is 2 * p-3 + shadow box
+                    let width = ($('.content').width() - 32); // 32 is margin
+                    $_content
+                        .css('height', height + 'px')
+                        .css('width', width + 'px');
+                    resize_timer = undefined;
+                }, nowait ? 100 : 700);
+            }
+            new ResizeObserver(resize_content).observe($_content.parent()[0])
+            resize_content(null, null, true);
+            //endregion
+
+        });
+    </script>
+    <!--HEADER%%-->
+</head>
+<body>
+    <!--%%BODY-->
+    <div class="row page-header pb-2">
+        <div class="col flex-grow-1">
+            <ul class="breadcrumb m-0 d-print-none" aria-label="Breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item" aria-current="page">Admin</li>
+            </ul>
+            <div class="d-flex flex-row flex-wrap flex-sm-nowrap justify-content-between align-items-center">
+                <div>
+                    <h3 class="fw-bold">Organizations</h3>
+                </div>
+                <div class="log-nav-buttons d-print-none">
+                    <div class="input-group pgActions" role="group" aria-label="Page actions">
+                        <input type="text" class="form-control edtSearch" placeholder="Search" aria-label="Search">
+                        <div class="input-group-append btn-group">
+                            <button href="#" class="btn btn-secondary btnSearch" title="Search"><i class="fa fa-search"></i></button>
+                            <button href="#" class="btn btn-secondary btnAdd" title="Add"><i class="fa fa-plus"></i></button>
+                            <button href="#" class="btn btn-secondary btnEdit" title="Edit"><i class="fa fa-pencil"></i></button>
+                            <button href="#" class="btn btn-secondary btnDelete" title="Delete"><i class="fa fa-trash-o"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="box box-primary d-grid">
+        <div class="page-content box-body d-flex flex-column align-items-stretch">
+            <div class="d-flex flex-row align-items-stretch">
+                <div>
+                    <ul>
+                        <li><i>To move Organization, drag its node under desired organization (requires permission)</i></li>
+                        <li><i>Before deleting an organization, delete/move all organization under it (requires permission)</i></li>
+                        <li><i>Root node cannot be deleted or edited</i></li>
+                    </ul>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="d-table border bg-primary text-light rounded-2 p-2 ms-auto me-0">
+                        <div class="d-table-row text-nowrap">
+                            <div class="d-table-cell pe-1 text-end">Name :</div>
+                            <div class="d-table-cell lblName"></div>
+                        </div>
+                        <div class="d-table-row text-nowrap">
+                            <div class="d-table-cell pe-1 text-end">Description :</div>
+                            <div class="d-table-cell lblDescription"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tree flex-grow-1 overflow-x-hidden overflow-y-auto"></div>
+        </div>
+    </div>
+    <div class="modal fade" id="dlg_Add_Edit" tabindex="-1" aria-labelledby="dlg_add_edit_title" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="dlg_add_edit_title">Add Organization</h1>
+                    <button type="button" class="btn-close btn-cancel" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <input type="hidden" id="edt_id" value="">
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="edt_name" class="form-control" placeholder="Name" aria-label="Name" required maxlength="32">
+                        <span class="input-group-text" id="edt_parent_node"></span>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" class="form-control" id="edt_description" placeholder="Description" aria-label="Description" required maxlength="100">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-ok">Ok</button>
+                    <button type="button" class="btn btn-secondary btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--BODY%%-->
+</body>
+</html>
