@@ -263,4 +263,4 @@ A fully customizable dashboard exist in the system which allows users to select 
 
 **Note:** This is a Web UI only dashboard and does not exists in Android and Windows applications.
 
-**Note:** At the moment only on of each dark and light themes are included in the code as page template. More will be added when Paid component is removed from the code.
+**Note:** At the moment only one of each dark and light themes are included in the code as page template. More will be added when Paid component is removed from the code.
